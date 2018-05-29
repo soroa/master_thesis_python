@@ -8,7 +8,7 @@ from constants import *
 readings_table_name = "sensor_readings"
 exercises_table_name = "exercises"
 workouts_table_name = "workout_sessions"
-sqlite_file = '/Users/mac/Downloads/sensor_readings_ankle'
+sqlite_file = '/Users/mac/Downloads/sensor_readings_mikey_wrist'
 
 
 def extract_data(workout_id):
@@ -20,6 +20,8 @@ def extract_data(workout_id):
             rep_readings = get_sub_readings_from_readings(readings)
             for rep in rep_readings:
                 plot = plot_readings(rep)
+            break
+        break
     plot.show()
 
 def get_exercises_for_ex_code(ex_code, workout_id):
@@ -54,6 +56,7 @@ def get_sub_readings_from_readings(readings):
 def plot_readings(readings, sensorType=ACCELEROMETER):
     values = readings[:, READING_VALUES]
     # extract reps
+
     reps = readings[:, READING_REP]
     rep_starts = np.zeros([reps.shape[0], 1])
     for i in range(0, reps.shape[0] - 1):
@@ -95,5 +98,4 @@ def plot_readings(readings, sensorType=ACCELEROMETER):
 
     return plt
 
-
-extract_data(5)
+extract_data(55)

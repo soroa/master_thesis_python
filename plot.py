@@ -8,7 +8,7 @@ from constants import *
 readings_table_name = "sensor_readings"
 exercises_table_name = "exercises"
 workouts_table_name = "workout_sessions"
-sqlite_file = '/Users/mac/Downloads/sensor_readings_simon_simon_bödvarsson_ankle'
+sqlite_file = '/Users/mac/Downloads/sensor_readings_matt_donato_corneel_ankle'
 
 
 def smooth(y, box_pts):
@@ -47,7 +47,6 @@ def plotExercise(sensorType=ROTATION_MOTION, exerciseId=1, exerciseCode=1):
     if table.size == 0:
         return None
 
-
     values = table[:, READING_VALUES]
     # extract reps
     reps = table[:, 6]
@@ -56,7 +55,7 @@ def plotExercise(sensorType=ROTATION_MOTION, exerciseId=1, exerciseCode=1):
         if reps[i] != reps[i + 1] or i == 0:
             rep_starts[i] = True
 
-    print(rep_starts)
+    # print(rep_starts)
 
     sensorReadingData = np.zeros([np.shape(values)[0], SENSOR_TO_VAR_COUNT[sensorType]])
 
@@ -72,20 +71,23 @@ def plotExercise(sensorType=ROTATION_MOTION, exerciseId=1, exerciseCode=1):
 
     timestamps = table[:, 4].astype("int64")
     timestamps = timestamps - timestamps[0]
-
     plt.suptitle(EXERCISE_CODES_TO_NAME[exerciseCode] + " " + SENSOR_TO_NAME[sensorType], fontsize=13)
 
     plt.subplot(3, 1, 1)
     plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
     plt.ylabel('x')
     addRepSeparators(plt, rep_starts, timestamps)
+
     plt.plot(timestamps, sensorReadingData[:, 0], 'r-')
 
     plt.subplot(3, 1, 2)
     plt.ylabel('y')
     plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
     addRepSeparators(plt, rep_starts, timestamps)
-    plt.plot(timestamps, sensorReadingData[:, 1], 'b-')
+    # resampling
+    interpol = interpolate(timestamps, sensorReadingData[:, 1])
+    plt.plot(interpol['x'], interpol['y'], 'b-')
+    # plt.plot(timestamps, sensorReadingData[:, 1], 'b-')
     # plt.plot(timestamps, smooth(sensorReadingData[:, 1], 40), 'b--')
 
     plt.subplot(3, 1, 3)
@@ -112,6 +114,16 @@ def plotAllExercisesForSession(sessionId, sensorCode):
         plt = plotExercise(sensorCode, id[0], exercise_codes[index][0])
         # plt.show()
     plt.show()
+
+
+def interpolate(x, y):
+    step = 10
+    print(list(range(0, x[x.shape[0] - 1], step)))
+    equaly_spaced_apart_xs = list(range(0, x[x.shape[0] - 1], step))
+    print(x.shape)
+    print(y.shape)
+    interpolated_y = np.interp(equaly_spaced_apart_xs, x, y)
+    return {'x': equaly_spaced_apart_xs, 'y': interpolated_y}
 
 
 ids = getAllWorkoutIds()

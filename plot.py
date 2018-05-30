@@ -5,10 +5,7 @@ import numpy as np
 
 from constants import *
 
-readings_table_name = "sensor_readings"
-exercises_table_name = "exercises"
-workouts_table_name = "workout_sessions"
-sqlite_file = '/Users/mac/Downloads/sensor_readings_matt_donato_corneel_ankle'
+sqlite_file = '/Users/mac/Downloads/sensor_readings_test5'
 
 
 def smooth(y, box_pts):
@@ -20,10 +17,10 @@ def smooth(y, box_pts):
 def getExercisesIdsForWorkout(workoutId):
     conn = sqlite3.connect(sqlite_file)
     c = conn.cursor()
-    c.execute('SELECT id FROM {tn} WHERE workout_session_id={wid}'.format(tn=exercises_table_name, wid=workoutId))
+    c.execute('SELECT id FROM {tn} WHERE workout_session_id={wid}'.format(tn=EXERCISES_TABLE_NAME, wid=workoutId))
     ids = np.array(c.fetchall())
     c.execute(
-        'SELECT exercise_code FROM {tn} WHERE workout_session_id={wid}'.format(tn=exercises_table_name, wid=workoutId))
+        'SELECT exercise_code FROM {tn} WHERE workout_session_id={wid}'.format(tn=EXERCISES_TABLE_NAME, wid=workoutId))
     exercise_codes = np.array(c.fetchall())
     return [ids, exercise_codes]
 
@@ -31,17 +28,18 @@ def getExercisesIdsForWorkout(workoutId):
 def getAllWorkoutIds():
     conn = sqlite3.connect(sqlite_file)
     c = conn.cursor()
-    c.execute('SELECT id FROM {tn}'.format(tn=workouts_table_name))
+    c.execute('SELECT id FROM {tn}'.format(tn=WORKOUTS_TABLE_NAME
+                                           ))
     ids = np.array(c.fetchall())
     return ids
 
 
-def plotExercise(sensorType=ROTATION_MOTION, exerciseId=1, exerciseCode=1):
+def plotExercise(sensorType=ACCELEROMETER, exerciseId=1, exerciseCode=1):
     conn = sqlite3.connect(sqlite_file)
     c = conn.cursor()
 
     c.execute(
-        'SELECT * FROM {tn} WHERE sensor_type={st} AND exercise_id={exid}'.format(tn=readings_table_name, st=sensorType,
+        'SELECT * FROM {tn} WHERE sensor_type={st} AND exercise_id={exid}'.format(tn=READINGS_TABLE_NAME, st=sensorType,
                                                                                   exid=exerciseId))
     table = np.array(c.fetchall())
     if table.size == 0:
@@ -126,5 +124,5 @@ def interpolate(x, y):
     return {'x': equaly_spaced_apart_xs, 'y': interpolated_y}
 
 
-ids = getAllWorkoutIds()
-plotAllExercisesForSession(ids[ids.shape[0] - 1][0], ACCELEROMETER)
+# ids = getAllWorkoutIds()
+# plotAllExercisesForSession(ids[ids.shape[0] - 1][0], ROTATION_MOTION)

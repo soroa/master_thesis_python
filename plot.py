@@ -5,7 +5,7 @@ import numpy as np
 
 from constants import *
 
-sqlite_file = '/Users/mac/Downloads/sensor_readings_test5'
+sqlite_file = '/Users/mac/Downloads/sensor_readings_desiree_heller_ankle'
 
 
 def smooth(y, box_pts):
@@ -34,7 +34,7 @@ def getAllWorkoutIds():
     return ids
 
 
-def plotExercise(sensorType=ACCELEROMETER, exerciseId=1, exerciseCode=1):
+def plotExercise(sensorType=ACCELEROMETER_CODE, exerciseId=1, exerciseCode=1):
     conn = sqlite3.connect(sqlite_file)
     c = conn.cursor()
 
@@ -123,6 +123,5 @@ def interpolate(x, y):
     interpolated_y = np.interp(equaly_spaced_apart_xs, x, y)
     return {'x': equaly_spaced_apart_xs, 'y': interpolated_y}
 
-
 # ids = getAllWorkoutIds()
-# plotAllExercisesForSession(ids[ids.shape[0] - 1][0], ROTATION_MOTION)
+# plotAllExercisesForSession(ids[ids.shape[0] - 1][0], ACCELEROMETER_CODE)

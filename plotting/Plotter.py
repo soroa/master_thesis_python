@@ -22,7 +22,7 @@ class Plotter:
             if repsDelimiters[i] == 1:
                 plot.axvline(x=timestamps[i])
 
-    def plot_exercise(exerciseId, exerciseCode, sensorType=ACCELEROMETER):
+    def plot_exercise(exerciseId, exerciseCode, sensorType=ACCELEROMETER_CODE):
         conn = sqlite3.connect(sqlite_file)
         c = conn.cursor()
 

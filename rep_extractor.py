@@ -34,7 +34,7 @@ def get_exercises_for_ex_code(ex_code, workout_id):
     return np.array(c.fetchall())
 
 
-def get_readings_for_ex_id(ex_id, sens_type=ACCELEROMETER):
+def get_readings_for_ex_id(ex_id, sens_type=ACCELEROMETER_CODE):
     conn = sqlite3.connect(sqlite_file)
     c = conn.cursor()
     c.execute('SELECT * FROM {tn} WHERE exercise_id={ex_id} AND sensor_type={sens_type}'.format(tn=readings_table_name,
@@ -53,7 +53,7 @@ def get_sub_readings_from_readings(readings):
     return sub_readings
 
 
-def plot_readings(readings, sensorType=ACCELEROMETER):
+def plot_readings(readings, sensorType=ACCELEROMETER_CODE):
     values = readings[:, READING_VALUES]
     # extract reps
 

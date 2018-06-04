@@ -3,12 +3,9 @@ import os
 import sqlite3
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 from constants import *
-from db_functions import get_exercises_ids_for_participants, get_exercises_ids_for_workout_id, \
-    get_exercise_codes_for_participants, get_readings_for_exercise, get_exercise_name_for_id, \
-    get_exercises_id_for_participant_and_code
+from db_functions import *
 from plot import addRepSeparators, interpolate
 
 tables = [WORKOUTS_TABLE_NAME, EXERCISES_TABLE_NAME, READINGS_TABLE_NAME]
@@ -33,7 +30,7 @@ def split_wrist_ankle_and_merge():
             wrist_readings.append(name)
     print(wrist_readings)
     print(ankle_readings)
-    # merge_databases(wrist_readings, "wrist")
+    merge_databases(wrist_readings, "wrist")
     merge_databases(ankle_readings, "ankle")
 
 
@@ -68,6 +65,8 @@ def merge_databases(names, position):
 
 
 def adjust_reversed_watch_position():
+    print("****** AJUST UPSIDE DOWN WATCH READINGS*******")
+    print("Running... ")
     db = sqlite3.connect(path + "merged_ankle")
     c = db.cursor()
     for id in reversed_ankle_watch_participant_ids:
@@ -78,19 +77,18 @@ def adjust_reversed_watch_position():
                                                                      exid=ex_id[0])).fetchall())
             for entry in readings:
                 values_as_string = entry[READING_VALUES]
-                print("before: " + values_as_string)
+                # print("before: " + values_as_string)
                 vals_split = np.array(values_as_string.split(" "))[0:3]
                 vals_as_float = vals_split.astype(np.float)
                 adjusted_values = np.multiply(vals_as_float, np.array([-1, -1, 1]))
                 adjust_values_as_string = str(adjusted_values[0]) + " " + str(adjusted_values[1]) + " " + str(
                     adjusted_values[2])
-                print("after: " + adjust_values_as_string)
+                # print("after: " + adjust_values_as_string)
                 entry[READING_VALUES] = adjust_values_as_string
                 c.execute(
                     "UPDATE {tn} SET [values]='{adjusted_values}' WHERE id={id} ".format(tn=READINGS_TABLE_NAME,
                                                                                          id=entry[READING_ID],
                                                                                          adjusted_values=adjust_values_as_string))
-                print(entry[READING_ID])
     db.commit()
     c.close()
 
@@ -106,17 +104,12 @@ def print_participant_name():
 
 
 def remove_zero_reps(position):
+    print("\n")
+    print("***** Removing 0 reps")
+    print("\n")
     db = sqlite3.connect(path + "merged_" + position)
     cursor = db.cursor()
     cursor.execute('DELETE FROM {tn} WHERE rep_count=0'.format(tn=READINGS_TABLE_NAME))
-    db.commit()
-    cursor.close()
-
-
-def remove_Andrea_Soro_workouts(position):
-    db = sqlite3.connect(path + "merged_" + position)
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM {tn} WHERE participant = 'Andrea Soro".format(tn=WORKOUTS_TABLE_NAME))
     db.commit()
     cursor.close()
 
@@ -129,37 +122,28 @@ def find_duplicates_workout(position):
     for p in participants:
         if participants.count(p) > 1:
             print("There are duplicate workouts for " + p)
-
     db.commit()
     cursor.close()
 
 
 def check_exercises_for_participant(db, participant, position):
     ex_codes = get_exercise_codes_for_participants(db, participant)
-    healthy = True
     for code in WORKOUT:
         if code not in ex_codes:
-            healthy = False
             print(participant + " did not perform " + EXERCISE_CODES_TO_NAME[code] + " on " + position)
-    if healthy:
-        print(participant + " " + position + " exercises are ok ")
     check_readings_for_participant(db, participant, position)
     # check that readings are there
 
 
 def check_readings_for_participant(db, participant, position):
     ex_ids = get_exercises_ids_for_participants(db, participant)
-    healthy = True
     for id in ex_ids:
         readings = get_readings_for_exercise(db, id)
         if readings.size == 0:
             print(participant + " " + position + "  readings are missing for exercise " + get_exercise_name_for_id(db,
-                                                                                                                   id) + " on " + position)
-            healthy = False
+                                                                                                                   id))
         else:
             check_all_sensors_were_recorded(readings, participant, position, id[0])
-    if healthy:
-        print(participant + " " + position + " readings are there")
 
 
 def check_all_sensors_were_recorded(readings, participant, position, ex_id):
@@ -174,6 +158,8 @@ def check_all_sensors_were_recorded(readings, participant, position, ex_id):
 
 
 def check_health(position):
+    print("****** HEALTH CHECK *******")
+    print("Running... ")
     db_wrist = sqlite3.connect(path + "merged_" + position)
     cursor_wrist = db_wrist.cursor()
     cursor_wrist.execute('SELECT participant FROM {tn}'.format(tn=WORKOUTS_TABLE_NAME))
@@ -226,7 +212,6 @@ def check_synchrony():
 ###
 
 def prepare_data():
-    remove_zero_reps("wrist")
     db = sqlite3.connect(path + "/merged_wrist")
     cursor = db.cursor()
     for code in WORKOUT:
@@ -362,8 +347,6 @@ def plot_exercise_from_db(exId, exerciseCode, sensorType=ACCELEROMETER_CODE):
         if reps[i] != reps[i + 1] or i == 0:
             rep_starts[i] = True
 
-    # print(rep_starts)
-
     sensorReadingData = np.zeros([np.shape(values)[0], SENSOR_TO_VAR_COUNT[sensorType]])
 
     i = 0
@@ -408,22 +391,30 @@ def plot_exercise_from_db(exId, exerciseCode, sensorType=ACCELEROMETER_CODE):
 
 
 def plot_overlap():
-    db_wrist = sqlite3.connect("./dbs/merged_wrist")
-    db_ankle = sqlite3.connect("./dbs/merged_ankle")
+    db_wrist = sqlite3.connect(path + "merged_wrist")
+    db_ankle = sqlite3.connect(path + "merged_ankle")
     cursor_wrist = db_wrist.cursor()
     cursor_ankle = db_ankle.cursor()
     cursor_wrist.execute('SELECT participant FROM {tn}'.format(tn=WORKOUTS_TABLE_NAME))
     participants = np.array(cursor_wrist.fetchall())
+    exercise = DEAD_LIFT
     plot = None
-    id_wrist = get_exercises_id_for_participant_and_code(db_wrist, participants[1,0], PUSH_UPS)
-    id_ankle = get_exercises_id_for_participant_and_code(db_ankle, participants[1,0], PUSH_UPS)
-    readings_wrist = get_readings_for_exercise(db_wrist, id_wrist)
-    readings_ankle = get_readings_for_exercise(db_ankle, id_ankle)
-    plot = plot_wrist_ankle_overlap(readings_wrist, readings_ankle, PUSH_UPS)
+
+    for p in participants:
+        if not did_participant_perform_exercise(db_wrist, p[0], exercise) or not did_participant_perform_exercise(db_ankle,
+                                                                                                              p[0],
+                                                                                                              exercise):
+            continue
+        id_wrist = get_exercises_id_for_participant_and_code(db_wrist, p[0], exercise)
+        id_ankle = get_exercises_id_for_participant_and_code(db_ankle, p[0], exercise)
+        readings_wrist = get_readings_for_exercise(db_wrist, id_wrist, ACCELEROMETER_CODE)
+        readings_ankle = get_readings_for_exercise(db_ankle, id_ankle, ACCELEROMETER_CODE)
+        plt.figure()
+        plot = plot_wrist_ankle_overlap( readings_wrist, readings_ankle, exercise, p[0])
     plot.show()
 
 
-def plot_wrist_ankle_overlap(readings_wrist, readings_ankle, exerciseCode, sensorType=ACCELEROMETER_CODE):
+def plot_wrist_ankle_overlap( readings_wrist, readings_ankle, exerciseCode, participant, sensorType=ACCELEROMETER_CODE):
     rep_starts_wrist = extract_reps_start_timestamps(readings_wrist)
     rep_starts_ankle = extract_reps_start_timestamps(readings_ankle)
 
@@ -436,30 +427,30 @@ def plot_wrist_ankle_overlap(readings_wrist, readings_ankle, exerciseCode, senso
     timestamps_wrist = extract_timestamps(readings_wrist)
     timestamps_ankle = extract_timestamps(readings_ankle)
 
-    plt.figure()
-    plt.suptitle(EXERCISE_CODES_TO_NAME[exerciseCode] + " " + SENSOR_TO_NAME[sensorType], fontsize=13)
+    plt.suptitle(EXERCISE_CODES_TO_NAME[exerciseCode] + " " + SENSOR_TO_NAME[sensorType] + " " + participant, fontsize=13)
 
-    plt.subplot(3, 1, 1)
+    # plt.subplot(total, 1, index + 1)
     plt.xticks(np.arange(min(timestamps_wrist), max(timestamps_wrist) + 1, 1000))
     plt.ylabel('x')
     addRepSeparators(plt, rep_starts_wrist, timestamps_wrist)
 
     plt.plot(timestamps_wrist, sensorReadingData_wrist[:, 0], 'r-')
     plt.plot(timestamps_ankle, sensorReadingData_ankle[:, 0], 'b-')
-
-    plt.subplot(3, 1, 2)
-    # plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
-    plt.ylabel('y')
+    #
+    # plt.subplot(total, 1, index)
+    # # plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
+    # plt.ylabel('y')
     addRepSeparators(plt, rep_starts_wrist, timestamps_wrist)
+    #
+    # plt.plot(timestamps_wrist, sensorReadingData_wrist[:, 1], 'r-')
+    # plt.plot(timestamps_ankle, sensorReadingData_ankle[:, 1], 'b-')
+    #
+    # plt.subplot(total, 1, 3)
+    # plt.ylabel('z')
 
-    plt.plot(timestamps_wrist, sensorReadingData_wrist[:, 1], 'r-')
-    plt.plot(timestamps_ankle, sensorReadingData_ankle[:, 1], 'b-')
-
-    plt.subplot(3, 1, 3)
-    plt.ylabel('z')
-
-    plt.plot(timestamps_wrist, sensorReadingData_wrist[:, 2], 'r-')
-    plt.plot(timestamps_ankle, sensorReadingData_ankle[:, 2], 'b-')
+    # addRepSeparators(plt, rep_starts_wrist, timestamps_wrist)
+    # plt.plot(timestamps_wrist, sensorReadingData_wrist[:, 2], 'r-')
+    # plt.plot(timestamps_ankle, sensorReadingData_ankle[:, 2], 'b-')
 
     return plt
 
@@ -490,12 +481,85 @@ def extract_reps_start_timestamps(readings_wrist):
     return rep_starts
 
 
-# check_health("ankle")
-plot_overlap()
-# find_duplicates_workout("ankle")
-# remove_null_reps("wrist")
-# plot_all_exercises_same_type(sqlite3.connect(path + "merged_ankle"),SQUATS)
-# remove_null_reps("ankle")
+def print_workout_info():
+    db_wrist = sqlite3.connect(path + "merged_wrist")
+    cursor_wrist = db_wrist.cursor()
+
+    ex_to_reps = {}
+    print("Counting reps per exercise...")
+    for ex_code in WORKOUT:
+        exercise_ids = np.array(cursor_wrist.execute(
+            'SELECT id FROM {tn} WHERE exercise_code = {ec} '.format(tn=EXERCISES_TABLE_NAME,
+                                                                     ec=ex_code)).fetchall())
+        reps_count = 0
+        for id in exercise_ids:
+            reps = np.array(cursor_wrist.execute(
+                'SELECT rep_count FROM {tn} WHERE exercise_id = {id} '.format(tn=READINGS_TABLE_NAME,
+                                                                              id=id[0])).fetchall())
+            if reps.shape[0] == 0:
+                continue
+            amax = np.amax(reps)
+            reps_count += amax
+        ex_to_reps[EXERCISE_CODES_TO_NAME[ex_code]] = reps_count
+
+    for key, value in ex_to_reps.items():
+        print(key + " : " + str(value))
+
+
+def remove_1_rep_exercises(position):
+    print("\n")
+    print("**** REMOVING ONE REP EXERCISES... ***** ")
+    print("\n")
+    db = sqlite3.connect(path + "merged_" + position)
+    cursor = db.cursor()
+    for ex_code in WORKOUT:
+        exercise_ids = np.array(cursor.execute(
+            'SELECT id FROM {tn} WHERE exercise_code = {ec} '.format(tn=EXERCISES_TABLE_NAME,
+                                                                     ec=ex_code)).fetchall())
+        for id in exercise_ids:
+            reps = np.array(cursor.execute(
+                'SELECT rep_count FROM {tn} WHERE exercise_id = {id} '.format(tn=READINGS_TABLE_NAME,
+                                                                              id=id[0])).fetchall())
+            if reps.shape[0] == 0:
+                print("Removed " + EXERCISE_CODES_TO_NAME[ex_code] + " " + get_participant_for_exercise_id(db,
+                                                                                                           id[
+                                                                                                               0]) + " because empty")
+                cursor.execute("DELETE FROM {tn} WHERE id={id}".format(tn=EXERCISES_TABLE_NAME, id=id[0]))
+                continue
+            amax = np.amax(reps)
+            if amax < 3:
+                print("Removed " + EXERCISE_CODES_TO_NAME[ex_code] + " " + get_participant_for_exercise_id(db,
+                                                                                                           id[
+                                                                                                               0]) + " because only 1 rep")
+                continue
+                cursor.execute("DELETE FROM {tn} WHERE id={id}".format(tn=EXERCISES_TABLE_NAME, id=id[0]))
+            if amax == 2:
+                print("Exercise " + str(id) + "has two reps")
+
+    db.commit()
+    cursor.close()
+
+
+def do_preprocessing():
+    for p in SMARTWATCH_POSITIONS:
+        print('\n')
+        print("********** " + p + " ************")
+        print('\n')
+        # remove_zero_reps(p)
+        # remove_1_rep_exercises(p)
+        check_health(p)
+    # adjust_reversed_watch_position()
+
+
+# plot_overlap()
 # split_wrist_ankle_and_merge()
+# print_workout_info()
+# do_preprocessing()
+# db = sqlite3.connect(path + "merged_" + "ankle")
+# plot_all_exercises_same_type(db, SQUATS)
+# remove_1_rep_exercises("wrist")
 # adjust_reversed_watch_position()
+# check_health()
 # prepare_data()
+# do_preprocessing()
+plot_overlap()

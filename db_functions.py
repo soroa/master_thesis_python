@@ -18,7 +18,7 @@ def get_exercises_ids_for_participants(db, participant):
 def get_exercises_id_for_participant_and_code(db, participant, code):
     cursor = db.cursor()
     cursor.execute("SELECT id FROM {tn} WHERE participant = '{participant}'".format(tn=WORKOUTS_TABLE_NAME,
-                                                                                   participant=participant))
+                                                                                    participant=participant))
     workout_id = np.array(cursor.fetchall())
     cursor.execute(
         'SELECT id FROM {tn} WHERE workout_session_id = {id} AND exercise_code={ex_code}'.format(
@@ -28,11 +28,36 @@ def get_exercises_id_for_participant_and_code(db, participant, code):
     return np.array(exercises_ids)[0]
 
 
+def did_participant_perform_exercise(db, participant, ex_code):
+    cursor = db.cursor()
+    cursor.execute("SELECT id FROM {tn} WHERE participant = '{participant}'".format(tn=WORKOUTS_TABLE_NAME,
+                                                                                    participant=participant))
+    workout_id = np.array(cursor.fetchall())
+    if (workout_id.size == 0):
+        return False
+
+    cursor.execute(
+        'SELECT id FROM {tn} WHERE workout_session_id = {id} AND exercise_code={ex_code}'.format(
+            tn=EXERCISES_TABLE_NAME,
+            id=workout_id[0, 0], ex_code=ex_code))
+    exercises_ids = cursor.fetchall()
+    return len(exercises_ids) > 0
+
+
 def get_exercises_ids_for_workout_id(workout_id, db):
     c = db.cursor()
     c.execute('SELECT id FROM {tn} WHERE workout_session_id={wid}'.format(tn=EXERCISES_TABLE_NAME, wid=workout_id))
     ids = np.array(c.fetchall())
     return ids
+
+
+def get_participant_for_exercise_id(db, exercise_id):
+    c = db.cursor()
+    c.execute('SELECT workout_session_id FROM {tn} WHERE id={eid}'.format(tn=EXERCISES_TABLE_NAME, eid=exercise_id))
+    workout_id = np.array(c.fetchall())[0]
+    c.execute('SELECT participant FROM {tn} WHERE id={wid}'.format(tn=WORKOUTS_TABLE_NAME, wid=workout_id[0]))
+    name = np.array(c.fetchall())
+    return name[0, 0]
 
 
 def get_exercise_codes_for_participants(db, participant):
@@ -47,11 +72,16 @@ def get_exercise_codes_for_participants(db, participant):
     return np.array(exercise_codes)
 
 
-def get_readings_for_exercise(db, id):
+def get_readings_for_exercise(db, id, sensor_type=None):
     cursor = db.cursor()
-    cursor.execute(
-        'SELECT * FROM {tn} WHERE exercise_id = {exid}'.format(tn=READINGS_TABLE_NAME,
-                                                               exid=id[0]))
+    if sensor_type is not None:
+        cursor.execute(
+            'SELECT * FROM {tn} WHERE exercise_id = {exid} AND sensor_type ={st}'.format(tn=READINGS_TABLE_NAME,
+                                                                                         exid=id[0], st=sensor_type))
+    else:
+        cursor.execute(
+            'SELECT * FROM {tn} WHERE exercise_id = {exid}'.format(tn=READINGS_TABLE_NAME,
+                                                                   exid=id[0]))
     return np.array(cursor.fetchall())
 
 

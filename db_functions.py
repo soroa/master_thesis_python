@@ -91,3 +91,26 @@ def get_exercise_name_for_id(db, id):
         'SELECT exercise_code FROM {tn} WHERE id = {id}'.format(tn=EXERCISES_TABLE_NAME,
                                                                 id=id[0]))
     return EXERCISE_CODES_TO_NAME[np.array(cursor.fetchall())[0, 0]]
+
+
+def get_participant_readings_for_exercise(db, participant, exercise_code):
+    codes = get_exercise_codes_for_participants(db, participant)
+    found = False
+    for code in codes:
+        if code[0] == exercise_code:
+            found = True
+    if not found:
+        return None
+
+    exericse_id = get_exercises_id_for_participant_and_code(db, participant, exercise_code)
+    readings = get_readings_for_exercise(db, exericse_id)
+    if readings.size == 0:
+        return None
+    return readings
+
+
+def get_participants(db):
+    b_cursor = db.cursor()
+    b_cursor.execute('SELECT participant FROM {tn}'.format(tn=WORKOUTS_TABLE_NAME))
+    participants = np.array(b_cursor.fetchall())
+    return participants

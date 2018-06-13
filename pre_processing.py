@@ -1,26 +1,24 @@
 import collections
 import os
 import sqlite3
-from shutil import copyfile
-
+import shutil
 import matplotlib.pyplot as plt
 
 from constants import *
+from constants import copy_from_path, path, numpy_reps_data_path, numpy_exercises_data_path
 from db_functions import *
 from plot import addRepSeparators, interpolate
 
 tables = [WORKOUTS_TABLE_NAME, EXERCISES_TABLE_NAME, READINGS_TABLE_NAME]
-reversed_ankle_watch_participant_ids = [42, 50, 51, 52, 54, 57, 60, 62, 64, 65, 67, 68, 69]
-
-copy_from_path = "./dbs/"
-path = "./dbs2/"
-numpy_reps_data_path = "./np_reps_data/"
-numpy_exercises_data_path = "./np_exercise_data/"
+reversed_ankle_watch_participant_ids = [42, 50, 51, 52, 53, 54, 57, 60, 62, 64, 65, 67, 68, 69]
 
 
 def split_wrist_ankle_and_merge():
+    for file in os.listdir(path):
+        os.remove(path + file)
+
     for file in os.listdir(copy_from_path):
-        copyfile(copy_from_path + file, path + file)
+        shutil.copyfile(copy_from_path + file, path + file)
 
     dbs_names_before_merge = os.listdir(path)
 
@@ -167,54 +165,58 @@ def check_health(position):
 
 
 def check_synchrony():
-    db_wrist = sqlite3.connect("./dbs/merged_wrist")
-    db_ankle = sqlite3.connect("./dbs/merged_ankle")
+    db_wrist = sqlite3.connect(path + "merged_wrist")
+    db_ankle = sqlite3.connect(path + "merged_ankle")
     cursor_wrist = db_wrist.cursor()
-    cursor_ankle = db_ankle.cursor()
     cursor_wrist.execute('SELECT participant FROM {tn}'.format(tn=WORKOUTS_TABLE_NAME))
     participants = np.array(cursor_wrist.fetchall())
     for p in participants:
+        print("\n")
+        print(p[0])
         for code in WORKOUT:
             readings_w = get_participant_readings_for_exercise(db_wrist, p[0], code)
             readings_a = get_participant_readings_for_exercise(db_ankle, p[0], code)
+            if readings_a is None or readings_w is None:
+                print(EXERCISE_CODES_TO_NAME[code] + " skipped. No Readings available")
+                continue
             timestampsW = readings_w[:, READING_TIMESTAMP]
             timestampsA = readings_a[:, READING_TIMESTAMP]
-
-            if timestampsW.size == 0 or timestampsA.size == 0:
-                print("Exercise Wrist not completed: participant " + p[0] + " " + EXERCISE_CODES_TO_NAME[code])
-                continue
-            if timestampsA.size == 0:
-                print("Exercise Ankle not completed: participant " + p[0] + " " + EXERCISE_CODES_TO_NAME[code])
-                continue
-
-            print("participant " + p[0] + " " + EXERCISE_CODES_TO_NAME[code])
-            print(timestampsA[0] - timestampsW[0])
+            if abs(int(timestampsA[0]) - int(timestampsW[0])) > 100:
+                print(p[0] + " " + EXERCISE_CODES_TO_NAME[code] + ": readings more than 100ms apart")
+                print(abs(int(timestampsA[0]) - int(timestampsW[0])))
     db_wrist.commit()
     db_ankle.commit()
+
 
 ###
 
 def prepare_data():
+
+    shutil.rmtree(numpy_exercises_data_path)
+    shutil.rmtree(numpy_reps_data_path)
     db_wrist = sqlite3.connect(path + "/merged_wrist")
     db_ankle = sqlite3.connect(path + "/merged_ankle")
     for code in WORKOUT:
         partipants = get_participants(db_wrist)
         for p in partipants:
             wrist_readings = get_participant_readings_for_exercise(db_wrist, p[0], code)
-            if (wrist_readings is None):
-                continue
-            if (ankle_readings is None):
+            if (wrist_readings is None or wrist_readings.size == 0):
                 continue
             ankle_readings = get_participant_readings_for_exercise(db_ankle, p[0], code)
+            if (ankle_readings is None or ankle_readings.size == 0):
+                continue
             interpolated_exercise_readings = interpolate_readings(wrist_readings, ankle_readings)
-            ex_id = get_exercises_id_for_participant_and_code(p[0], code)
-            save_exercise_npy(interpolated_exercise_readings, code, ex_id)
-            single_reps_readings_wrist = get_sub_readings_from_readings(wrist_readings)
-            single_reps_readings_ankle = get_sub_readings_from_readings(ankle_readings)
-            for i in range(0, single_reps_readings_wrist.shape[0]):
+            ex_id = get_exercises_id_for_participant_and_code(db_wrist ,p[0], code)
+            save_exercise_npy(interpolated_exercise_readings, code, ex_id[0])
+
+            # reps
+            single_reps_readings_wrist = get_sub_readings_from_readings_for_wrist(wrist_readings)
+            single_reps_readings_ankle = derive_sub_readings_for_ankle_from_wrist(single_reps_readings_wrist,
+                                                                                  ankle_readings)
+            for i in range(0, min(len(single_reps_readings_wrist), len(single_reps_readings_ankle))):
                 interpolated_rep_reading = interpolate_readings(single_reps_readings_wrist[i],
                                                                 single_reps_readings_ankle[i])
-                save_rep_npy(interpolated_rep_reading, code, ex_id, i)
+                save_rep_npy(interpolated_rep_reading, code, ex_id[0], i)
 
 
 def save_rep_npy(rep_readings, exercise_code, exercise_id, rep):
@@ -254,46 +256,31 @@ def interpolate_readings(wrist_readings, ankle_readings):
     gyro_readings_values_a = extract_sensor_readings_values(gyro_readings_a[:, READING_VALUES])
     rot_readings_values_a = extract_sensor_readings_values(rot_readings_a[:, READING_VALUES])
 
-    start_timestamp_w = max(
-        [acc_readings_w[0, READING_TIMESTAMP].astype("int64"), gyro_readings_w[0, READING_TIMESTAMP].astype("int64"),
-         rot_readings_w[0, READING_TIMESTAMP].astype("int64")])
+    timestamps_wrist = extract_timestamps(wrist_readings)
+    timestamps_ankle = extract_timestamps(ankle_readings)
 
-    start_timestamp_a = max(
-        [acc_readings_a[0, READING_TIMESTAMP].astype("int64"), gyro_readings_a[0, READING_TIMESTAMP].astype("int64"),
-         rot_readings_a[0, READING_TIMESTAMP].astype("int64")])
+    start_timestamp = 0
 
-    start_timestamp = max(start_timestamp_w, start_timestamp_a)
-
-    last_timestamp_w = min([acc_readings_w[acc_readings_w.shape[0] - 1, READING_TIMESTAMP].astype("int64"),
-                            gyro_readings_w[gyro_readings_w.shape[0] - 1, READING_TIMESTAMP].astype("int64"),
-                            rot_readings_w[rot_readings_w.shape[0] - 1, READING_TIMESTAMP].astype("int64")])
-
-    last_timestamp_a = min([acc_readings_a[acc_readings_a.shape[0] - 1, READING_TIMESTAMP].astype("int64"),
-                            gyro_readings_a[gyro_readings_a.shape[0] - 1, READING_TIMESTAMP].astype("int64"),
-                            rot_readings_a[rot_readings_a.shape[0] - 1, READING_TIMESTAMP].astype("int64")])
-    end_timestamp = min(last_timestamp_w, last_timestamp_a)
+    end_timestamp = min(np.max(timestamps_wrist), np.max(timestamps_ankle))
 
     step = 10
-    equaly_spaced_apart_timestamps = np.array(list(range(start_timestamp, last_timestamp_w + 1, step)))
+    equaly_spaced_apart_timestamps = np.array(list(range(start_timestamp, end_timestamp + 1, step)))
     interpolated_readings = np.zeros((3 * 3 * 2 + 1, equaly_spaced_apart_timestamps.shape[0]))
 
     values_list = [acc_readings_values_w, gyro_readings_values_w, rot_readings_values_w, acc_readings_values_a,
                    gyro_readings_values_a, rot_readings_values_a]
+    time_stamp_list = [extract_timestamps(acc_readings_w), extract_timestamps(gyro_readings_w), extract_timestamps(
+        rot_readings_w), extract_timestamps(acc_readings_a), extract_timestamps(gyro_readings_a),
+                                                                                extract_timestamps(rot_readings_a)]
     current_indexs = 0
-    for values in values_list:
-        if values is acc_readings_values_w or values is acc_readings_values_a:
-            original_timestamps = acc_readings_w[:, READING_TIMESTAMP].astype("int64")
-        elif values is gyro_readings_values_w or values is gyro_readings_values_a:
-            original_timestamps = gyro_readings_w[:, READING_TIMESTAMP].astype("int64")
-        else:
-            original_timestamps = rot_readings_w[:, READING_TIMESTAMP].astype("int64")
-
+    for i in range(0,len(values_list)):
+        original_timestamps = time_stamp_list[i]
         interpolated_x = np.interp(equaly_spaced_apart_timestamps, original_timestamps,
-                                   values[:, 0])
+                                   values_list[i][:, 0])
         interpolated_y = np.interp(equaly_spaced_apart_timestamps, original_timestamps,
-                                   values[:, 1])
+                                   values_list[i][:, 1])
         interpolated_z = np.interp(equaly_spaced_apart_timestamps, original_timestamps,
-                                   values[:, 2])
+                                   values_list[i][:, 2])
         interpolated_x = interpolated_x.reshape(interpolated_x.shape[0], 1)
         interpolated_y = interpolated_y.reshape(interpolated_y.shape[0], 1)
         interpolated_z = interpolated_z.reshape(interpolated_z.shape[0], 1)
@@ -315,7 +302,7 @@ def extract_sensor_readings_values(readings):
     return sensor_reading_data
 
 
-def get_sub_readings_from_readings(readings):
+def get_sub_readings_from_readings_for_wrist(readings):
     reps = np.unique(readings[:, READING_REP])
     sub_readings = []
     for rep in reps:
@@ -323,6 +310,24 @@ def get_sub_readings_from_readings(readings):
         a = readings[readings[:, READING_REP] == rep]
         sub_readings.append(a)
     return sub_readings
+
+
+def derive_sub_readings_for_ankle_from_wrist(wrist_rep_readings, ankle_readings):
+    ankle_fist_timestamp = ankle_readings[0, READING_TIMESTAMP].astype(np.int64)
+    last = 0
+    reps = []
+    for rep in wrist_rep_readings:
+        timestamps = extract_timestamps(rep)
+        start = last
+        end = last+ timestamps[timestamps.shape[0] - 1]
+        filtered = ankle_readings[
+                        start <= ankle_readings[:, READING_TIMESTAMP].astype(np.int64) - ankle_fist_timestamp]
+        filtered = filtered[filtered[:, READING_TIMESTAMP].astype(np.int64) - ankle_fist_timestamp <= end]
+        if(filtered.size==0):
+            continue
+        reps.append(filtered)
+        last = end + 1
+    return reps
 
 
 def plot_all_exercises_same_type(db, ex_code):
@@ -401,26 +406,34 @@ def plot_exercise_from_db(exId, exerciseCode, sensorType=ACCELEROMETER_CODE):
 def plot_overlap():
     db_wrist = sqlite3.connect(path + "merged_wrist")
     db_ankle = sqlite3.connect(path + "merged_ankle")
+
     cursor_wrist = db_wrist.cursor()
     cursor_ankle = db_ankle.cursor()
     cursor_wrist.execute('SELECT participant FROM {tn}'.format(tn=WORKOUTS_TABLE_NAME))
     participants = np.array(cursor_wrist.fetchall())
-    exercise = DEAD_LIFT
     plot = None
-
-    for p in participants:
-        if not did_participant_perform_exercise(db_wrist, p[0], exercise) or not did_participant_perform_exercise(
-                db_ankle,
-                p[0],
-                exercise):
-            continue
-        id_wrist = get_exercises_id_for_participant_and_code(db_wrist, p[0], exercise)
-        id_ankle = get_exercises_id_for_participant_and_code(db_ankle, p[0], exercise)
-        readings_wrist = get_readings_for_exercise(db_wrist, id_wrist, ACCELEROMETER_CODE)
-        readings_ankle = get_readings_for_exercise(db_ankle, id_ankle, ACCELEROMETER_CODE)
-        plt.figure()
-        plot = plot_wrist_ankle_overlap(readings_wrist, readings_ankle, exercise, p[0])
+    participants = [["Virginia Storni"], ["Max abe"], ["Matteo"], ["Tobi bro"], ["Damian ga"],
+                    ["Matt senn"], ["Donato pari"], ["Riccardo rigamonti"],
+                    ["Desiree Heller"], ["Karol Wojtas"], ["Renata farkas"]]
+    participants = [["Donato pari"]]
+    EXERCISES = WORKOUT
+    for exercise in EXERCISES:
+        for p in participants:
+            if not did_participant_perform_exercise(db_wrist, p[0], exercise) or not did_participant_perform_exercise(
+                    db_ankle,
+                    p[0],
+                    exercise):
+                continue
+            id_wrist = get_exercises_id_for_participant_and_code(db_wrist, p[0], exercise)
+            id_ankle = get_exercises_id_for_participant_and_code(db_ankle, p[0], exercise)
+            readings_wrist = get_readings_for_exercise(db_wrist, id_wrist, ACCELEROMETER_CODE)
+            readings_ankle = get_readings_for_exercise(db_ankle, id_ankle, ACCELEROMETER_CODE)
+            if readings_wrist.size == 0 or readings_ankle.size == 0:
+                continue
+            plt.figure()
+            plot = plot_wrist_ankle_overlap(readings_wrist, readings_ankle, exercise, p[0])
     plot.show()
+
 
 
 def plot_wrist_ankle_overlap(readings_wrist, readings_ankle, exerciseCode, participant, sensorType=ACCELEROMETER_CODE):
@@ -433,8 +446,13 @@ def plot_wrist_ankle_overlap(readings_wrist, readings_ankle, exerciseCode, parti
     sensorReadingData_wrist = extract_readings_floats(values_wrist, sensorType)
     sensorReadingData_ankle = extract_readings_floats(values_ankle, sensorType)
 
-    timestamps_wrist = extract_timestamps(readings_wrist)
-    timestamps_ankle = extract_timestamps(readings_ankle)
+    shortest = min(sensorReadingData_ankle.shape[0], sensorReadingData_wrist.shape[0])
+
+    sensorReadingData_ankle = sensorReadingData_ankle[0:shortest, :]
+    sensorReadingData_wrist = sensorReadingData_wrist[0:shortest, :]
+
+    timestamps_wrist = extract_timestamps(readings_wrist)[0:shortest]
+    timestamps_ankle = extract_timestamps(readings_ankle)[0:shortest]
 
     plt.suptitle(EXERCISE_CODES_TO_NAME[exerciseCode] + " " + SENSOR_TO_NAME[sensorType] + " " + participant,
                  fontsize=13)
@@ -443,14 +461,15 @@ def plot_wrist_ankle_overlap(readings_wrist, readings_ankle, exerciseCode, parti
     plt.xticks(np.arange(min(timestamps_wrist), max(timestamps_wrist) + 1, 1000))
     plt.ylabel('x')
     addRepSeparators(plt, rep_starts_wrist, timestamps_wrist)
+    # addRepSeparators(plt, rep_starts_ankle, timestamps_wrist)
 
-    plt.plot(timestamps_wrist, sensorReadingData_wrist[:, 0], 'r-')
-    plt.plot(timestamps_ankle, sensorReadingData_ankle[:, 0], 'b-')
+    plt.plot(timestamps_wrist, sensorReadingData_wrist[:, 1], 'r-')
+    plt.plot(timestamps_ankle, sensorReadingData_ankle[:, 1], 'b-')
     #
     # plt.subplot(total, 1, index)
     # # plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
     # plt.ylabel('y')
-    addRepSeparators(plt, rep_starts_wrist, timestamps_wrist)
+    # addRepSeparators(plt, rep_starts_wrist, timestamps_wrist)
     #
     # plt.plot(timestamps_wrist, sensorReadingData_wrist[:, 1], 'r-')
     # plt.plot(timestamps_ankle, sensorReadingData_ankle[:, 1], 'b-')
@@ -463,6 +482,11 @@ def plot_wrist_ankle_overlap(readings_wrist, readings_ankle, exerciseCode, parti
     # plt.plot(timestamps_ankle, sensorReadingData_ankle[:, 2], 'b-')
 
     return plt
+
+
+def find_index_of_last_reading_of_last_complete_rep(readings):
+    reps = readings[:, READING_REP]
+    amax = np.amax(reps)
 
 
 def extract_timestamps(readings_entries):
@@ -541,8 +565,8 @@ def remove_1_2_rep_exercises(position):
                 print("Removed " + EXERCISE_CODES_TO_NAME[ex_code] + " " + get_participant_for_exercise_id(db,
                                                                                                            id[
                                                                                                                0]) + " because only 1 rep")
-                continue
                 cursor.execute("DELETE FROM {tn} WHERE id={id}".format(tn=EXERCISES_TABLE_NAME, id=id[0]))
+                continue
             if amax == 2:
                 print("Exercise " + str(id) + "has two reps")
 
@@ -550,26 +574,126 @@ def remove_1_2_rep_exercises(position):
     cursor.close()
 
 
-def do_preprocessing():
+def remove_delay_foot(participant, delay_in_ms):
+    print(participant)
+    db = sqlite3.connect(path + "merged_ankle")
+    db_wrist = sqlite3.connect(path + "merged_wrist")
+    for ex in WORKOUT:
+        # readings_wrist= get_participant_readings_for_exercise(db_wrist, participant, ex)
+        # if(readings_wrist is None or readings_wrist.size>0):
+        #     continue
+        # rep_duration  = find_rep_duration_in_sec(readings_wrist)
+        readings = get_participant_readings_for_exercise(db, participant, ex)
+        if (readings is not None and readings.size > 0):
+            first_timestamp = readings[0, READING_TIMESTAMP].astype("int64")
+            cut_timestamp = first_timestamp + delay_in_ms
+            cut_id = readings[0, READING_ID]
+            for i in range(0, readings.shape[0]):
+                if (readings[i, READING_TIMESTAMP].astype("int64") > cut_timestamp):
+                    break
+                else:
+                    cut_id = readings[i, READING_ID]
+            if cut_id == readings[0, READING_ID]:
+                continue
+            c = db.cursor()
+            c.execute("DELETE FROM {tn} WHERE id>={first_id} AND id<={cut_id}".format(tn=READINGS_TABLE_NAME,
+                                                                                      first_id=readings[0, READING_ID],
+                                                                                      cut_id=cut_id))
+            db.commit()
+            c.close()
+            # ex_id = get_exercises_id_for_participant_and_code(db, participant, ex)
+            # readings_withou_delay = get_participant_readings_for_exercise(db, participant, ex)
+            # if readings_withou_delay is not None and readings_withou_delay.size>0:
+            #     shift_reps(db, ex_id, readings_withou_delay, rep_duration)
+
+
+def find_rep_duration_in_sec(readings):
+    time_stamps = []
+    rep_starts = extract_reps_start_timestamps(readings)
+    for i in range(0, rep_starts.shape[0]):
+        if rep_starts[i][0] == 1:
+            time_stamps.append(readings[i, READING_TIMESTAMP].astype(np.int64))
+    avg = 0
+    for j in range(1, len(time_stamps)):
+        print(time_stamps[j] - time_stamps[j - 1])
+        avg += (time_stamps[j] - time_stamps[j - 1])
+    return int(round(avg / len(time_stamps) / 100))
+
+
+def shift_reps(db, ex_id, readings, rep_duration):
+    current_rep = 1
+    first_rep_start = readings[0, READING_TIMESTAMP].astype(np.int64)
+    last = readings[readings.shape[0] - 1, READING_TIMESTAMP].astype(np.int64)
+    current_start = first_rep_start
+    while current_start < last:
+        finish = current_start + rep_duration * 100
+        c = db.cursor()
+        c.execute(
+            "UPDATE {tn} SET rep_count='{rep}' WHERE exercise_id = {ex_id} AND timestamp>={t_start} AND timestamp<={t_end} ".format(
+                tn=READINGS_TABLE_NAME,
+                rep=current_rep,
+                ex_id=ex_id[0],
+                t_start=current_start,
+                t_end=finish))
+        current_start = finish
+        current_rep += 1
+    db.commit()
+    c.close()
+
+
+def do_common_preprocessing():
     for p in SMARTWATCH_POSITIONS:
         print('\n')
         print("********** " + p + " ************")
         print('\n')
         remove_zero_reps(p)
-        check_health(p)
+        # check_health(p)
         remove_1_2_rep_exercises(p)
+    for p, d in DELAYS.items():
+        remove_delay_foot(p, d)
     adjust_reversed_watch_position()
 
 
-# plot_overlap()
-# split_wrist_ankle_and_merge()
-# print_workout_info()
-# do_preprocessing()
-# db = sqlite3.connect(path + "merged_" + "ankle")
-# plot_all_exercises_same_type(db, SQUATS)
-# remove_1_rep_exercises("wrist")
-# adjust_reversed_watch_position()
-# check_health()
-# prepare_data()
-do_preprocessing()
-# plot_overlap()
+def remove_dirty_reps():
+    for p in SMARTWATCH_POSITIONS:
+        db = sqlite3.connect(path + "merged_" + p)
+        c = db.cursor()
+        for participant, reps_range_map in reps_to_keep.items():
+            print(participant)
+            rep_ranges = reps_to_keep[participant]
+            for ex_code, reps_list in rep_ranges.items():
+                if reps_list is None:
+                    continue
+                readings = get_participant_readings_for_exercise(db, participant, ex_code)
+                if readings is None or readings.size == 0:
+                    continue
+                readings_lower = readings[readings[:, READING_REP].astype(np.int32) < reps_list.start]
+                readings_upper = readings[readings[:, READING_REP].astype(np.int32) >= reps_list.stop]
+                if readings_lower.shape[0] > 0:
+                    c.execute(
+                        "DELETE FROM {tn} WHERE id>={first_of_lower} AND id<={last_of_lower}".format(
+                            tn=READINGS_TABLE_NAME,
+                            last_of_lower=
+                            readings_lower[
+                                readings_lower.shape[
+                                    0] - 1, READING_ID],
+                            first_of_lower=
+                            readings_lower[
+                                0, READING_ID]))
+                if (readings_upper.shape[0] > 0):
+                    c.execute(
+                        "DELETE FROM {tn} WHERE id>={first_of_upper} AND id<={last_of_upper}".format(
+                            tn=READINGS_TABLE_NAME,
+                            last_of_upper=
+                            readings_upper[
+                                readings_upper.shape[
+                                    0] - 1, READING_ID],
+                            first_of_upper=
+                            readings_upper[
+                                0, READING_ID]))
+
+        db.commit()
+        c.close()
+
+
+prepare_data()

@@ -65,6 +65,8 @@ def get_exercise_codes_for_participants(db, participant):
     cursor.execute("SELECT id FROM {tn} WHERE participant = '{participant}'".format(tn=WORKOUTS_TABLE_NAME,
                                                                                     participant=participant))
     workout_id = np.array(cursor.fetchall())
+    if workout_id.size == 0:
+        return None
     cursor.execute(
         'SELECT exercise_code FROM {tn} WHERE workout_session_id = {id}'.format(tn=EXERCISES_TABLE_NAME,
                                                                                 id=workout_id[0, 0]))
@@ -95,6 +97,8 @@ def get_exercise_name_for_id(db, id):
 
 def get_participant_readings_for_exercise(db, participant, exercise_code):
     codes = get_exercise_codes_for_participants(db, participant)
+    if codes is None:
+        return None
     found = False
     for code in codes:
         if code[0] == exercise_code:
@@ -114,3 +118,15 @@ def get_participants(db):
     b_cursor.execute('SELECT participant FROM {tn}'.format(tn=WORKOUTS_TABLE_NAME))
     participants = np.array(b_cursor.fetchall())
     return participants
+
+
+def delete_reps_for_participant(db, participant, reps, exercise_code):
+    id = get_exercises_id_for_participant_and_code(db, participant, exercise_code)
+    c = db.cursor()
+    for r in reps:
+        c.execute("DELETE FROM {tn} WHERE id={id} AND rep_count={rep}".format(tn=READINGS_TABLE_NAME, id=id[0], rep = r))
+
+    db.commit()
+    c.close()
+
+

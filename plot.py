@@ -98,7 +98,7 @@ def plotExercise(sensorType=ACCELEROMETER_CODE, exerciseId=1, exerciseCode=1):
 
 
 def addRepSeparators(plot, repsDelimiters, timestamps):
-    for i in range(0, repsDelimiters.shape[0]):
+    for i in range(0, timestamps.shape[0]):
         if repsDelimiters[i] == 1:
             plot.axvline(x=timestamps[i])
 

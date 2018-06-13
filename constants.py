@@ -14,6 +14,10 @@ WALL_BALLS = 12
 WORKOUT = [PUSH_UPS, PULL_UPS, BURPEES, DEAD_LIFT, BOX_JUMPS, SQUATS, CRUNCHES, WALL_BALLS,
            KETTLEBELL_PRESS, KETTLEBELL_SQUAT_PRESS]
 
+DELAYS = {"Desiree Heller": 1000, "Daniel": 1000, "Matteo": 1000, "Tobi bro": 1000, "Renata farkas": 1000,
+          "Karol Wojtas": 1000, "Riccardo Rigamonti": 1000, "Damian ga": 4000,
+          "Donato pari": 4500}
+
 EXERCISE_CODES_TO_NAME = {
     PUSH_UPS: "Push ups",
     PULL_UPS: "Pull ups",
@@ -62,3 +66,152 @@ WORKOUTS_TABLE_NAME = "workout_sessions"
 POSITION_WRIST = "wrist"
 POSITION_ANKLE = "ankle"
 SMARTWATCH_POSITIONS = [POSITION_WRIST, POSITION_ANKLE]
+
+
+#Numpy data
+WRIST_ACCEL_X = 1
+WRIST_ACCEL_Y = 2
+WRIST_ACCEL_Z = 3
+WRIST_GYRO_X = 4
+WRIST_GYRO_Y = 5
+WRIST_GYRO_Z = 6
+WRIST_ROT_X = 7
+WRIST_ROT_Y = 8
+WRIST_ROT_Z = 9
+
+ANKLE_ACCEL_X = 10
+ANKLE_ACCEL_Y = 11
+ANKLE_ACCEL_Z = 12
+ANKLE_GYRO_X = 12
+ANKLE_GYRO_Y = 14
+ANKLE_GYRO_Z = 15
+ANKLE_ROT_X = 16
+ANKLE_ROT_Y = 17
+ANKLE_ROT_Z = 18
+
+
+
+reps_to_keep = {
+    "Virginia Storni": {PUSH_UPS: range(2, 16), PULL_UPS: range(2, 11), BURPEES: range(2, 11), DEAD_LIFT: range(2, 22),
+                        BOX_JUMPS: None, SQUATS: None,
+                        CRUNCHES: range(1, 2), WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Simon bod": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                  CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Alex mil": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                 CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Max abe": {PUSH_UPS: range(1, 15), PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Fra lam": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Marcel feh": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                   CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Starkaor Hrobjartsson": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None,
+                              SQUATS: None, CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None,
+                              KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Mike jiang": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                   CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Raphael riedo": {PUSH_UPS: range(2,16), PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                      CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Daniel luetolf": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                       CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Matteo": {PUSH_UPS: range(1, 15), PULL_UPS: range(1, 7), BURPEES: range(1, 10), DEAD_LIFT: range(1, 14),
+               BOX_JUMPS: range(1, 11), SQUATS: range(2, 15),
+               CRUNCHES: range(1, 13), WALL_BALLS: None, KETTLEBELL_PRESS: range(1, 11),
+               KETTLEBELL_SQUAT_PRESS: range(1, 13)}
+    ,
+    "Tobi bro": {PUSH_UPS: range(1, 14), PULL_UPS: range(1, 6), BURPEES: range(1, 9), DEAD_LIFT: range(1, 9),
+                 BOX_JUMPS: range(1, 8), SQUATS: range(1, 11),
+                 CRUNCHES: range(1, 7), WALL_BALLS: range(1, 10), KETTLEBELL_PRESS: range(1, 9),
+                 KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Denis kara": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                   CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Damian ga": {PUSH_UPS: range(1, 12), PULL_UPS: range(1, 5), BURPEES: range(1, 11), DEAD_LIFT: range(1, 12),
+                  BOX_JUMPS: range(1, 10), SQUATS: range(1, 14),
+                  CRUNCHES: range(1, 13), WALL_BALLS: range(1, 14), KETTLEBELL_PRESS: range(1, 12),
+                  KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Muriel haug": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                    CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Matt senn": {PUSH_UPS: range(3, 21), PULL_UPS: range(1, 6), BURPEES: None, DEAD_LIFT: range(2, 21),
+                  BOX_JUMPS: range(2, 9), SQUATS: range(1, 2),
+                  CRUNCHES: None, WALL_BALLS: range(3, 12), KETTLEBELL_PRESS: range(2, 11),
+                  KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Donato pari": {PUSH_UPS: range(1, 9), PULL_UPS: None, BURPEES: range(1, 9), DEAD_LIFT: range(1, 10),
+                    BOX_JUMPS: range(1, 12), SQUATS: range(1, 10),
+                    CRUNCHES: range(1, 10), WALL_BALLS: range(1, 11), KETTLEBELL_PRESS: range(1, 9),
+                    KETTLEBELL_SQUAT_PRESS: range(1, 8)}
+    ,
+    "Corneel van": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                    CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Alex turicum": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                     CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    " Viviane des": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                     CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Anna fertig": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                    CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Lara riparip": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                     CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Riccardo rigamonti": {PUSH_UPS: range(2,20), PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None,
+                           SQUATS: None, CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None,
+                           KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Desiree Heller": {PUSH_UPS: range(1, 13), PULL_UPS: range(1,6), BURPEES: range(1, 12), DEAD_LIFT: range(1, 15),
+                       BOX_JUMPS: range(1, 12),
+                       SQUATS: range(1, 15),
+                       CRUNCHES: range(1, 15), WALL_BALLS: None, KETTLEBELL_PRESS: range(1, 12),
+                       KETTLEBELL_SQUAT_PRESS: range(1, 9)}
+    ,
+    "Karol Wojtas": {PUSH_UPS: range(1, 11), PULL_UPS: None, BURPEES: range(1, 9), DEAD_LIFT: range(1, 11),
+                     BOX_JUMPS: None, SQUATS: range(1, 13),
+                     CRUNCHES: range(1, 14), WALL_BALLS: None, KETTLEBELL_PRESS: range(1, 10),
+                     KETTLEBELL_SQUAT_PRESS: range(1, 9)}
+    ,
+    "Camilla cav": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                    CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Martin butt": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                    CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Beni fueg": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                  CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Alberto sanchez": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                        CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Karl dei": {PUSH_UPS: None, PULL_UPS: None, BURPEES: range(1, 9), DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                 CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Llorenc mon": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+                    CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Renata farkas": {PUSH_UPS: range(1, 9), PULL_UPS: None, BURPEES: range(1, 10), DEAD_LIFT: range(1, 15),
+                      BOX_JUMPS: range(1, 12),
+                      SQUATS: range(1, 15),
+                      CRUNCHES: None, WALL_BALLS: range(1, 5), KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+    ,
+    "Ramon fan": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: range(1, 12), BOX_JUMPS: None, SQUATS: None,
+                  CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
+}
+copy_from_path = "./dbs/"
+path = "./dbs2/"
+numpy_reps_data_path = "./np_reps_data/"
+numpy_exercises_data_path = "./np_exercise_data/"

@@ -1,5 +1,3 @@
-import sqlite3
-
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -9,15 +7,21 @@ from constants import *
 
 def plot_reps():
     reps_file_names = os.listdir(numpy_reps_data_path+EXERCISE_CODES_TO_NAME[PUSH_UPS])
-    for file in reps_file_names[0:6]:
+    for file in reps_file_names[0:1]:
         rep = np.load(numpy_reps_data_path+EXERCISE_CODES_TO_NAME[PUSH_UPS]+"/"+file)
         plot_rep(rep, "PUSH UPS")
     plt.show()
 
 
-def plot_rep(rep, exname):
+def get_info():
+    reps_ex_names = os.listdir(numpy_reps_data_path)
+    for ex in reps_ex_names:
+        print(ex + " " + str(len(os.listdir(numpy_reps_data_path+'/' + ex))))
 
-    #acc wrist
+
+
+def plot_rep(rep, exname):
+    rep = add_0_padding_to_rep(rep, 500)
     plt.figure()
     plt.suptitle(exname , fontsize=13)
     plt.subplot(6,3 ,1)
@@ -135,6 +139,25 @@ def plot_rep(rep, exname):
     plt.ylabel('rot z')
     plt.plot(timestamps, rep[ANKLE_ROT_Z,:], 'g-')
 
-plot_reps()
+
+def get_longest_rep_in_ms():
+    reps_ex_names = os.listdir(numpy_reps_data_path)
+    max = 0
+    for ex in reps_ex_names:
+        single_reps = os.listdir(numpy_reps_data_path + '/' + ex)
+        for r_name in single_reps:
+            rep = np.load(numpy_reps_data_path+"/"+ex+'/'+r_name)
+            add_0_padding_to_rep(rep, 5000)
+            if rep.shape[1]>max:
+                print(ex)
+                max = rep.shape[1]
+    print(max*10)
+    return max*10
 
 
+def add_0_padding_to_rep(rep, final_length):
+    padded_rep = np.zeros([rep.shape[0], final_length])
+    padded_rep[:, 0:rep.shape[1]]= rep
+    return padded_rep
+
+get_info()

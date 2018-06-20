@@ -32,6 +32,19 @@ EXERCISE_CODES_TO_NAME = {
     WALL_BALLS: "Wall balls"
 }
 
+EXERCISE_NAME_TO_CLASS_LABEL = {
+    "Push ups": 1,
+    "Pull ups": 2,
+    "Burpees": 3,
+    "Dead lifts": 4,
+    "Box jumps": 5,
+    "Squats": 6,
+    "Crunches": 7,
+    "Wall balls": 8,
+    "KB Squat press": 9,
+    "KB Press": 10
+}
+
 ACCELEROMETER_CODE = 1
 GYROSCOPE_CODE = 4
 ROTATION_MOTION = 11
@@ -67,8 +80,7 @@ POSITION_WRIST = "wrist"
 POSITION_ANKLE = "ankle"
 SMARTWATCH_POSITIONS = [POSITION_WRIST, POSITION_ANKLE]
 
-
-#Numpy data
+# Numpy data
 WRIST_ACCEL_X = 1
 WRIST_ACCEL_Y = 2
 WRIST_ACCEL_Z = 3
@@ -88,8 +100,6 @@ ANKLE_GYRO_Z = 15
 ANKLE_ROT_X = 16
 ANKLE_ROT_Y = 17
 ANKLE_ROT_Z = 18
-
-
 
 reps_to_keep = {
     "Virginia Storni": {PUSH_UPS: range(2, 16), PULL_UPS: range(2, 11), BURPEES: range(2, 11), DEAD_LIFT: range(2, 22),
@@ -118,7 +128,8 @@ reps_to_keep = {
     "Mike jiang": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
                    CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
     ,
-    "Raphael riedo": {PUSH_UPS: range(2,16), PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
+    "Raphael riedo": {PUSH_UPS: range(2, 16), PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None,
+                      SQUATS: None,
                       CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
     ,
     "Daniel luetolf": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
@@ -170,11 +181,11 @@ reps_to_keep = {
     "Lara riparip": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None, SQUATS: None,
                      CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
     ,
-    "Riccardo rigamonti": {PUSH_UPS: range(2,20), PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None,
+    "Riccardo rigamonti": {PUSH_UPS: range(2, 20), PULL_UPS: None, BURPEES: None, DEAD_LIFT: None, BOX_JUMPS: None,
                            SQUATS: None, CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None,
                            KETTLEBELL_SQUAT_PRESS: None}
     ,
-    "Desiree Heller": {PUSH_UPS: range(1, 13), PULL_UPS: range(1,6), BURPEES: range(1, 12), DEAD_LIFT: range(1, 15),
+    "Desiree Heller": {PUSH_UPS: range(1, 13), PULL_UPS: range(1, 6), BURPEES: range(1, 12), DEAD_LIFT: range(1, 15),
                        BOX_JUMPS: range(1, 12),
                        SQUATS: range(1, 15),
                        CRUNCHES: range(1, 15), WALL_BALLS: None, KETTLEBELL_PRESS: range(1, 12),
@@ -213,5 +224,5 @@ reps_to_keep = {
 }
 copy_from_path = "./dbs/"
 path = "./dbs2/"
-numpy_reps_data_path = "./np_reps_data/"
-numpy_exercises_data_path = "./np_exercise_data/"
+numpy_reps_data_path = "./data/np_reps_data/"
+numpy_exercises_data_path = "./data/np_exercise_data/"

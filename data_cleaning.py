@@ -148,6 +148,17 @@ def check_all_sensors_were_recorded(readings, participant, position, ex_id):
     if occurences[str(ROTATION_MOTION)] == 0:
         print(participant + " " + position + " rot data is missing for ex_id " + str(ex_id))
 
+def were_all_sensors_recorded(readings):
+    sensor_codes = readings[:, READING_SENSOR_TYPE]
+    occurences = collections.Counter(sensor_codes)
+    if occurences[str(ACCELEROMETER_CODE)] == 0:
+        return False
+    if occurences[str(GYROSCOPE_CODE)] == 0:
+        return False
+    if occurences[str(ROTATION_MOTION)] == 0:
+        return False
+    return True
+
 
 def check_health(position):
     print("****** HEALTH CHECK *******")
@@ -192,8 +203,8 @@ def check_synchrony():
 
 def prepare_data():
 
-    shutil.rmtree(numpy_exercises_data_path)
-    shutil.rmtree(numpy_reps_data_path)
+    shutil.rmtree(numpy_exercises_data_path, ignore_errors=True)
+    shutil.rmtree(numpy_reps_data_path, ignore_errors=True)
     db_wrist = sqlite3.connect(path + "/merged_wrist")
     db_ankle = sqlite3.connect(path + "/merged_ankle")
     for code in WORKOUT:
@@ -204,6 +215,8 @@ def prepare_data():
                 continue
             ankle_readings = get_participant_readings_for_exercise(db_ankle, p[0], code)
             if (ankle_readings is None or ankle_readings.size == 0):
+                continue
+            if(not were_all_sensors_recorded(ankle_readings) or not were_all_sensors_recorded(wrist_readings)):
                 continue
             interpolated_exercise_readings = interpolate_readings(wrist_readings, ankle_readings)
             ex_id = get_exercises_id_for_participant_and_code(db_wrist ,p[0], code)
@@ -579,10 +592,6 @@ def remove_delay_foot(participant, delay_in_ms):
     db = sqlite3.connect(path + "merged_ankle")
     db_wrist = sqlite3.connect(path + "merged_wrist")
     for ex in WORKOUT:
-        # readings_wrist= get_participant_readings_for_exercise(db_wrist, participant, ex)
-        # if(readings_wrist is None or readings_wrist.size>0):
-        #     continue
-        # rep_duration  = find_rep_duration_in_sec(readings_wrist)
         readings = get_participant_readings_for_exercise(db, participant, ex)
         if (readings is not None and readings.size > 0):
             first_timestamp = readings[0, READING_TIMESTAMP].astype("int64")
@@ -601,10 +610,7 @@ def remove_delay_foot(participant, delay_in_ms):
                                                                                       cut_id=cut_id))
             db.commit()
             c.close()
-            # ex_id = get_exercises_id_for_participant_and_code(db, participant, ex)
-            # readings_withou_delay = get_participant_readings_for_exercise(db, participant, ex)
-            # if readings_withou_delay is not None and readings_withou_delay.size>0:
-            #     shift_reps(db, ex_id, readings_withou_delay, rep_duration)
+
 
 
 def find_rep_duration_in_sec(readings):
@@ -695,5 +701,5 @@ def remove_dirty_reps():
         db.commit()
         c.close()
 
+# prepare_data()
 
-prepare_data()

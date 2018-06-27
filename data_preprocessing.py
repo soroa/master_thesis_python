@@ -1,7 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-
-from data_loading import get_reps_data
 
 
 def normalized(a, axis=2, order=2):

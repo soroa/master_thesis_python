@@ -625,7 +625,7 @@ def find_rep_duration_in_sec(readings):
         avg += (time_stamps[j] - time_stamps[j - 1])
     return int(round(avg / len(time_stamps) / 100))
 
-
+#dont' use
 def shift_reps(db, ex_id, readings, rep_duration):
     current_rep = 1
     first_rep_start = readings[0, READING_TIMESTAMP].astype(np.int64)
@@ -653,13 +653,12 @@ def do_common_preprocessing():
         print("********** " + p + " ************")
         print('\n')
         remove_zero_reps(p)
-        # check_health(p)
         remove_1_2_rep_exercises(p)
     for p, d in DELAYS.items():
         remove_delay_foot(p, d)
     adjust_reversed_watch_position()
 
-
+#don't use this
 def remove_dirty_reps():
     for p in SMARTWATCH_POSITIONS:
         db = sqlite3.connect(path + "merged_" + p)
@@ -701,5 +700,7 @@ def remove_dirty_reps():
         db.commit()
         c.close()
 
-# prepare_data()
+split_wrist_ankle_and_merge()
+do_common_preprocessing()
+prepare_data()
 

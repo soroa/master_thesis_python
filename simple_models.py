@@ -6,7 +6,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 
-from data_loading import get_reps_data_features
+from data_loading import get_reps_with_features
 
 # X, Y = get_reps_features_data()
 # X, Y = get_windowed_exerices_raw_training_data()
@@ -20,7 +20,7 @@ from data_loading import get_reps_data_features
 # Y_labels = np.argwhere(Y > 0)[:, 1]
 # train_features, test_features, train_labels, test_labels = train_test_split(X_scaled, Y_labels, test_size=0.25,
 #                                                                             random_state=42)
-train_features, train_labels, test_features, test_labels = get_reps_data_features()
+train_features, train_labels, test_features, test_labels = get_reps_with_features()
 print("train shape " + str(train_features.shape))
 print("test shape " + str(test_features.shape))
 

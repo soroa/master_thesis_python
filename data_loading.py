@@ -75,7 +75,7 @@ def extract_windows(exercise_reading, window_length_in_ms):
 # get_windowed_exerices_raw_training_data()
 
 
-def get_reps_data_features():
+def get_reps_with_features():
     train_ids = get_exercise_ids()
     initial_length = len(train_ids)
     while len(train_ids) > int(0.95 * initial_length):
@@ -103,6 +103,37 @@ def get_reps_data_features():
                 labels_test = np.append(labels_test, label)
 
     return [reps_train, labels_train, reps_test, labels_test]
+
+
+def get_reps_raw_with_zero_padding():
+    train_ids = get_exercise_ids()
+    initial_length = len(train_ids)
+    while len(train_ids) > int(0.90 * initial_length):
+        index = random.randrange(len(train_ids))
+        del train_ids[index]
+
+    reps_test = np.zeros((0, 18, 500))
+    labels_test = np.zeros((0, 1))
+    reps_train = np.zeros((0, 18, 500))
+    labels_train = np.zeros((0, 1))
+    reps_ex_names = os.listdir(numpy_reps_data_path)
+    for ex in reps_ex_names:
+        label = EXERCISE_NAME_TO_CLASS_LABEL[ex]
+        single_reps_file_names = os.listdir(numpy_reps_data_path + '/' + ex)
+        for r_name in single_reps_file_names:
+            rep = np.load(numpy_reps_data_path + "/" + ex + '/' + r_name)[1:]
+            rep_padded = np.zeros((1, 18, 500))
+            rep_padded[0, :, 0:rep.shape[1]] = rep
+            rep_ex_id_plus_rep_num = re.sub("[^0-9]", "", r_name)
+            rep_ex_id = rep_ex_id_plus_rep_num[0:len(rep_ex_id_plus_rep_num) - 1]
+            if rep_ex_id in train_ids:
+                reps_train = np.append(reps_train, rep_padded, axis=0)
+                labels_train = np.append(labels_train, label)
+            else:
+                reps_test = np.append(reps_test, rep_padded, axis=0)
+                labels_test = np.append(labels_test, label)
+
+    return [reps_train.transpose((0,2,1)), labels_train, reps_test.transpose((0,2,1)), labels_test]
 
 
 def get_reps_labels():
@@ -142,3 +173,5 @@ def add_0_padding_to_rep(rep, final_length):
     padded_rep = np.zeros([rep.shape[0], final_length])
     padded_rep[:, 0:rep.shape[1]] = rep
     return padded_rep
+
+

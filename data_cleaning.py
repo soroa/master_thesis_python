@@ -223,8 +223,8 @@ def prepare_data():
                 continue
             interpolated_exercise_readings = interpolate_readings(wrist_readings, ankle_readings)
             ex_id = get_exercises_id_for_participant_and_code(db_wrist, p[0], code)
+            print(str(code) + str(p) + " ex id "+ str(ex_id))
             save_exercise_npy(interpolated_exercise_readings, code, ex_id[0])
-
             # reps
             single_reps_readings_wrist = get_sub_readings_from_readings_for_wrist(wrist_readings)
             single_reps_readings_ankle = derive_sub_readings_for_ankle_from_wrist(single_reps_readings_wrist,
@@ -236,8 +236,8 @@ def prepare_data():
             if p[0] not in partipant_to_exercises_codes_map.keys():
                 partipant_to_exercises_codes_map[p[0]] = [ex_id[0]]
             else:
-                partipant_to_exercises_codes_map[p[0]].append(ex_id[0])
-    with open('file.txt', 'w') as file:
+                partipant_to_exercises_codes_map[p[0]].append(int(ex_id[0]))
+    with open('participant_ex_code_map.txt', 'w+') as file:
         file.write(json.dumps(partipant_to_exercises_codes_map))  # use `json.loads` to do the reverse
 
 
@@ -280,7 +280,14 @@ def interpolate_readings(wrist_readings, ankle_readings):
 
     timestamps_wrist = extract_timestamps(wrist_readings)
     timestamps_ankle = extract_timestamps(ankle_readings)
-
+    #####
+    if withPlots:
+        plt.subplot(3, 1, 1)
+        plt.suptitle("interpolating in cleaning: preprocessed data")
+        timestamps_w_a = acc_readings_w[:, 4].astype("int64")
+        timestamps_w_a = timestamps_w_a - timestamps_w_a[0]
+        plt.plot(timestamps_w_a, acc_readings_values_w[:,2])
+        ####
     start_timestamp = 0
 
     end_timestamp = min(np.max(timestamps_wrist), np.max(timestamps_ankle))
@@ -304,12 +311,24 @@ def interpolate_readings(wrist_readings, ankle_readings):
         interpolated_z = np.interp(equaly_spaced_apart_timestamps, original_timestamps,
                                    values_list[i][:, 2])
         interpolated_x = interpolated_x.reshape(interpolated_x.shape[0], 1)
+        ###
+        if withPlots:
+            if(i==0):
+                plt.subplot(3, 1, 2)
+                plt.plot(equaly_spaced_apart_timestamps, interpolated_z)
+            # ##
         interpolated_y = interpolated_y.reshape(interpolated_y.shape[0], 1)
         interpolated_z = interpolated_z.reshape(interpolated_z.shape[0], 1)
         concatenate = np.concatenate(
             (interpolated_x.transpose(), interpolated_y.transpose(), interpolated_z.transpose()))
         interpolated_readings[1 + current_indexs * 3: 1 + current_indexs * 3 + 3, :] = concatenate
         current_indexs += 1
+
+    if withPlots:
+        plt.subplot(3, 1, 3)
+        plt.plot(equaly_spaced_apart_timestamps, interpolated_readings[3,:])
+        plt.show()
+        plt.clf()
     return interpolated_readings
 
 
@@ -411,9 +430,9 @@ def plot_exercise_from_db(exId, exerciseCode, sensorType=ACCELEROMETER_CODE):
     plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
     addRepSeparators(plt, rep_starts, timestamps)
     # resampling
-    interpol = interpolate(timestamps, sensorReadingData[:, 1])
-    plt.plot(interpol['x'], interpol['y'], 'b-')
-    # plt.plot(timestamps, sensorReadingData[:, 1], 'b-')
+    # interpol = interpolate(timestamps, sensorReadingData[:, 1])
+    # plt.plot(interpol['x'], interpol['y'], 'b-')
+    plt.plot(timestamps, sensorReadingData[:, 1], 'b-')
     # plt.plot(timestamps, smooth(sensorReadingData[:, 1], 40), 'b--')
 
     plt.subplot(3, 1, 3)
@@ -421,6 +440,82 @@ def plot_exercise_from_db(exId, exerciseCode, sensorType=ACCELEROMETER_CODE):
     plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
     addRepSeparators(plt, rep_starts, timestamps)
     plt.plot(timestamps, sensorReadingData[:, 2], 'g-')
+
+    return plt
+
+
+def plot_raw_versus_interpolated(exId, exerciseCode, sensorType=ACCELEROMETER_CODE):
+    conn = sqlite3.connect(path + "merged_wrist")
+    c = conn.cursor()
+
+    c.execute(
+        'SELECT * FROM {tn} WHERE exercise_id={exid} AND sensor_type={st}'.format(tn=READINGS_TABLE_NAME,
+                                                                                  st=sensorType,
+                                                                                  exid=exId))
+    table = np.array(c.fetchall())
+    if table.size == 0:
+        return None
+
+    values = table[:, READING_VALUES]
+    # extract reps
+    reps = table[:, 6]
+    rep_starts = np.zeros([reps.shape[0], 1])
+    for i in range(0, reps.shape[0] - 1):
+        if reps[i] != reps[i + 1] or i == 0:
+            rep_starts[i] = True
+
+    sensorReadingData = np.zeros([np.shape(values)[0], SENSOR_TO_VAR_COUNT[sensorType]])
+
+    i = 0
+    for reading in values:
+        vals = np.array(reading.split(" "))
+        vals = vals.astype(np.float)
+        sensorReadingData[i] = vals
+        i = i + 1
+
+
+    timestamps = table[:, 4].astype("int64")
+    timestamps = timestamps - timestamps[0]
+
+    plt.figure()
+    plt.suptitle(EXERCISE_CODES_TO_NAME[exerciseCode] + " " + SENSOR_TO_NAME[sensorType] + " " + str(exId), fontsize=13)
+
+    plt.subplot(2, 1, 1)
+    plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
+    plt.ylabel('x')
+    addRepSeparators(plt, rep_starts, timestamps)
+
+    plt.plot(timestamps, sensorReadingData[:, 2], 'r-')
+    equaly_spaced_apart_timestamps = np.array(list(range(0, timestamps[timestamps.shape[0]-1], 10)))
+
+    interpolated_x = np.interp(equaly_spaced_apart_timestamps, timestamps,
+                               sensorReadingData[:, 2])
+
+    plt.subplot(2, 1, 2)
+    plt.xticks(np.arange(min(equaly_spaced_apart_timestamps), max(equaly_spaced_apart_timestamps) + 1, 1000))
+    plt.ylabel('x')
+    # addRepSeparators(plt, rep_starts, timestamps)
+
+    plt.plot(equaly_spaced_apart_timestamps, interpolated_x, 'b-')
+
+
+    # plt.subplot(4, 1, 3)
+    # plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
+    # plt.ylabel('x')
+    # addRepSeparators(plt, rep_starts, timestamps)
+    #
+    # plt.plot(timestamps, sensorReadingData[:, 2], 'r-')
+    # equaly_spaced_apart_timestamps = np.array(list(range(0, timestamps[timestamps.shape[0] - 1], 10)))
+    #
+    # interpolated_x = np.interp(equaly_spaced_apart_timestamps, timestamps,
+    #                            sensorReadingData[:, 2])
+    #
+    # plt.subplot(4, 1, 4)
+    # plt.xticks(np.arange(min(equaly_spaced_apart_timestamps), max(equaly_spaced_apart_timestamps) + 1, 1000))
+    # plt.ylabel('x')
+    # # addRepSeparators(plt, rep_starts, timestamps)
+    #
+    # plt.plot(equaly_spaced_apart_timestamps, interpolated_x, 'b-')
 
     return plt
 
@@ -708,7 +803,6 @@ def remove_dirty_reps():
         db.commit()
         c.close()
 
-
 # split_wrist_ankle_and_merge()
 # do_common_preprocessing()
-prepare_data()
+# prepare_data()

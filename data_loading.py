@@ -2,12 +2,15 @@ import os
 import random
 import re
 
-import numpy as np
+from scipy.stats import mode
+
+from utils import *
+
+matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 
 from constants import *
 from data_features_extraction import extract_features_for_single_reading, extract_features
-from utils import yaml_loader
 
 
 def remove_nans_raw(X, Y):
@@ -25,74 +28,6 @@ def get_total_number_of_exercises():
     return count
 
 
-def get_windowed_exerices_feautres_for_training_data(with_feature_extraction, training_exercise_codes=None,
-                                                     config=None):
-    ex_folders = os.listdir(numpy_exercises_data_path)
-
-    windows_train = []
-    windows_test = []
-    window_length = config.get("data_params")["window_length"]
-    labels_train = []
-    labels_test = []
-    for ex_folder in ex_folders:
-        exericse_readings_list = os.listdir(numpy_exercises_data_path + '/' + ex_folder)
-        label = EXERCISE_NAME_TO_CLASS_LABEL[ex_folder]
-        for exercise_file in exericse_readings_list:
-            exercise = np.load(numpy_exercises_data_path + "/" + ex_folder + '/' + exercise_file)
-            windows_for_exercise = extract_windows(exercise, window_length)
-            exercise_code = int(re.sub("[^0-9]", "", exercise_file))
-            if exercise_code in training_exercise_codes:
-                windows_train += windows_for_exercise
-            else:
-                windows_test += windows_for_exercise
-            for i in range(0, len(windows_for_exercise)):
-                if exercise_code in training_exercise_codes:
-                    labels_train.append(label)
-                else:
-                    labels_test.append(label)
-    X_train = np.asarray(windows_train)
-    X_train = X_train[:, 1:, :]
-    Y_train = np.asarray(labels_train)
-    X_test = np.asarray(windows_test)
-    X_test = X_test[:, 1:, :]
-    Y_test = np.asarray(labels_test)
-    if config is not None:
-        sensors = config.get("sensors")
-        sensor_mask = np.ones(18).astype(np.bool)
-        if "acc" not in sensors:
-            sensor_mask[0:3] = False
-            sensor_mask[9:12] = False
-        if "gyro" not in sensors:
-            sensor_mask[3:6] = False
-            sensor_mask[12:15] = False
-        if "rot" not in sensors:
-            sensor_mask[6:9] = False
-            sensor_mask[15:] = False
-        positions = config.get("sensor_positions")
-        if "wrist" not in positions:
-            sensor_mask[0:9] = False
-        elif "foot" not in positions:
-            sensor_mask[9:] = False
-
-        X_train = X_train[:, sensor_mask, :]
-        X_test = X_test[:, sensor_mask, :]
-
-    if with_feature_extraction:
-        X_train_features = extract_features(X_train)
-        X_test_features = extract_features(X_test)
-        X_train_features = np.nan_to_num(X_train_features)
-        X_test_features = np.nan_to_num(X_test_features)
-        return [X_train_features, Y_train, X_test_features, Y_test]
-    else:
-        X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], X_train.shape[2], 1)
-        X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], X_test.shape[2], 1)
-        X_train = np.nan_to_num(X_train)
-        X_test = np.nan_to_num(X_test)
-        return [np.transpose(X_train, (0, 2, 1, 3)), Y_train,
-                np.transpose(X_test, (0, 2, 1, 3)),
-                Y_test]
-
-
 def get_group_for_id(id, config):
     part_to_ex = config.get("participant_to_ex_code_map")
     i = 0
@@ -103,10 +38,19 @@ def get_group_for_id(id, config):
     return None
 
 
+def get_experience_level_for_ex_id(id, config):
+    part_to_ex = config.get("participant_to_ex_code_map")
+    for name in list(part_to_ex.keys()):
+        if int(id) in part_to_ex[name]:
+            return EXPERIENCE_LEVEL_MAP[name]
+    return None
+
+
 def get_grouped_windows_for_exerices(with_feature_extraction,
-                                     config=None):
+                                     config=None, window_length=None):
     ex_folders = os.listdir(numpy_exercises_data_path)
-    window_length = config.get("data_params")["window_length"]
+    if (window_length is None):
+        window_length = config.get("data_params")["window_length"]
     groups = []
     windows = []
     labels = []
@@ -155,6 +99,42 @@ def get_grouped_windows_for_exerices(with_feature_extraction,
         X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
         X = np.nan_to_num(X)
         return [np.transpose(X, (0, 2, 1, 3)), Y, groups]
+
+
+def get_rep_count_for_exericse_id(ex_id):
+    reps_ex_names = os.listdir(numpy_reps_data_path)
+    reps = 0
+    for ex in reps_ex_names:
+        single_reps = os.listdir(numpy_reps_data_path + '/' + ex)
+        for r_name in single_reps:
+            if ex_id in r_name:
+                reps += 1
+    return reps
+
+
+def get_exercise_readings():
+    ex_folders = os.listdir(numpy_exercises_data_path)
+    exercises = []
+    labels = []
+    rep_counts = []
+    a = True
+    for ex_folder in ex_folders:
+        if not os.path.isdir(numpy_exercises_data_path + ex_folder):
+            continue;
+        exericse_readings_list = os.listdir(numpy_exercises_data_path + '/' + ex_folder)
+        label = EXERCISE_NAME_TO_CLASS_LABEL[ex_folder]
+        for exercise_file in exericse_readings_list:
+            if a:
+                print(exercise_file)
+                a = False
+            exercise = np.load(numpy_exercises_data_path + "/" + ex_folder + '/' + exercise_file)
+            exercises.append(exercise[1:, :])
+            exercise_id = (re.sub("[^0-9]", "", exercise_file))
+            rep_count = get_rep_count_for_exericse_id(exercise_id)
+            labels.append(label)
+            rep_counts.append(rep_count)
+    Y = np.asarray(labels)
+    return exercises, Y, rep_counts
 
 
 def extract_windows(exercise_reading, window_length_in_ms):
@@ -324,53 +304,152 @@ def get_reps_duration_map():
     return ex_code_to_rep_count_map
 
 
-def does_window_contain_rep_transition(stop, rep_duration, transition_duration, window_length):
-    if stop % rep_duration <= window_length - transition_duration / 2 and stop % rep_duration> transition_duration/2:
+def does_window_contain_rep_transition(window_endtime, rep_duration, transition_duration, window_length):
+    if window_endtime % rep_duration <= window_length - transition_duration / 2 and window_endtime % rep_duration >= transition_duration / 2:
         return True
     return False
 
 
-def get_exercise_labeled_transition_windows(exercise_reading, window_length_in_ms, rep_duration, transition_duration):
+def get_exercise_labeled_transition_windows(exercise_reading, window_length_in_ms, exercise_code, transition_duration,
+                                            ex_code_class=None, with_ex_code_as_feature=False):
+    reps_duration_map = get_reps_duration_map()
+    rep_duration = reps_duration_map[exercise_code]
     windows = []
     labels = []
     for start in range(0, exercise_reading.shape[1] - int(window_length_in_ms / 10),
                        int(window_length_in_ms / 10 * 0.20)):
         stop = start + int(window_length_in_ms / 10)
-        windows.append(exercise_reading[:, start:stop])
-        if does_window_contain_rep_transition(stop, rep_duration, transition_duration, window_length_in_ms/10):
+        if with_ex_code_as_feature:
+            with_ex_code_feature = np.append(exercise_reading[:, start:stop], np.full((1, 100), ex_code_class), axis=0)
+            windows.append(with_ex_code_feature)
+        else:
+            windows.append(exercise_reading[:, start:stop])
+        if does_window_contain_rep_transition(stop, rep_duration, transition_duration, window_length_in_ms / 10):
             labels.append(True)
         else:
             labels.append(False)
     return (windows, labels)
 
 
+def calculate_longest_and_shortest_rep_per_exercise():
+    reps_folders = os.listdir(numpy_reps_data_path)
+    ex_code_to_rep_durations = [[], [], [], [], [], [], [], [], [], []]
+    ex_code_seen = []
+    for rep_folder in reps_folders:
+        reps_readings_list = os.listdir(numpy_reps_data_path + '/' + rep_folder)
+        for rep_readings_file_name in reps_readings_list:
+            rep_ex_id_plus_rep_num = re.sub("[^0-9]", "", rep_readings_file_name)
+            rep_ex_id = int(rep_ex_id_plus_rep_num[0:3])
+            rep = np.load(numpy_reps_data_path + rep_folder + "/" + rep_readings_file_name)
+            length = rep.shape[1]
+            len_rounded = int(50 * round(float(length) / 50))
+            if rep_ex_id in ex_code_seen or len_rounded < 150:
+                continue
+            else:
+                ex_code_seen += [rep_ex_id]
+            ex_code_to_rep_durations[EXERCISE_NAME_TO_CLASS_LABEL[rep_folder] - 1] += [len_rounded]
+            # print(len_rounded)
+            # print()
+    for i in range(0, len(ex_code_to_rep_durations)):
+        ex_code_to_rep_durations[i] = (
+            min(ex_code_to_rep_durations[i]), mode(ex_code_to_rep_durations[i])[0][0], max(ex_code_to_rep_durations[i]))
+    return ex_code_to_rep_durations
+
+
 def get_grouped_windows_for_rep_transistion(with_feature_extraction,
-                                            config=None):
+                                            config=None, use_exercise_code_as_group = False):
     ex_folders = os.listdir(numpy_exercises_data_path)
     window_length = config.get("data_params")["window_length"]
-    reps_duration_map = get_reps_duration_map()
     rep_transition_duration = 50
+    window_length_in_ms = 1000
     groups = []
     windows = []
-    labels = []
+    transition_labels = []
+    classes = []
     for ex_folder in ex_folders:
+        if not os.path.isdir(numpy_exercises_data_path + ex_folder):
+            continue
         exericse_readings_list = os.listdir(numpy_exercises_data_path + '/' + ex_folder)
         for exercise_file in exericse_readings_list:
             exercise = np.load(numpy_exercises_data_path + "/" + ex_folder + '/' + exercise_file)
             exercise_code = int(re.sub("[^0-9]", "", exercise_file))
 
-            (windows_for_exercise, labels) = get_exercise_labeled_transition_windows(exercise, 1000,
-                                                                                     reps_duration_map[exercise_code],
-                                                                                     rep_transition_duration)
+            (windows_for_exercise, transition_labels_for_ex) = get_exercise_labeled_transition_windows(exercise,
+                                                                                                      window_length_in_ms,
+                                                                                                      exercise_code,
+                                                                                                      rep_transition_duration,
+                                                                                                      EXERCISE_NAME_TO_CLASS_LABEL[
+                                                                                                          ex_folder],
+                                                                                                      with_ex_code_as_feature=False)
             windows += windows_for_exercise
-            labels += labels
-            current_group = get_group_for_id(exercise_code, config)
+            transition_labels += transition_labels_for_ex
+            if use_exercise_code_as_group:
+                current_group = exercise_code
+            else:
+                current_group = get_group_for_id(exercise_code, config)
             for i in range(0, len(windows_for_exercise)):
+                groups.append(current_group)
+                classes.append(EXERCISE_NAME_TO_CLASS_LABEL[ex_folder])
+
+    X = np.asarray(windows)
+    X = X[:, 1:, :]
+    Y = np.asarray(transition_labels)
+    classes = np.asarray(classes).reshape((len(classes), 1))
+    groups = np.asarray(groups)
+    # if config is not None:
+    #     sensors = config.get("sensors")
+    #     sensor_mask = np.ones(18).astype(np.bool)
+    #     if "acc" not in sensors:
+    #         sensor_mask[0:3] = False
+    #         sensor_mask[9:12] = False
+    #     if "gyro" not in sensors:
+    #         sensor_mask[3:6] = False
+    #         sensor_mask[12:15] = False
+    #     if "rot" not in sensors:
+    #         sensor_mask[6:9] = False
+    #         sensor_mask[15:] = False
+    #     positions = config.get("sensor_positions")
+    #     if "wrist" not in positions:
+    #         sensor_mask[0:9] = False
+    #     elif "foot" not in positions:
+    #         sensor_mask[9:] = False
+    #
+    #     X = X[:, sensor_mask, :]
+
+    if with_feature_extraction:
+        X = extract_features(X)
+        X_features = np.nan_to_num(X)
+        return [X_features, Y, groups, classes]
+    else:
+        X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
+        X = np.nan_to_num(X)
+        return [np.transpose(X, (0, 2, 1, 3)), Y,classes, groups]
+
+
+def get_experience_level_data(config):
+    ex_folders = os.listdir(numpy_exercises_data_path)
+    window_length = config.get("data_params")["window_length"]
+    groups = []
+    windows = []
+    experience_labels = []
+    for ex_folder in ex_folders:
+        if not os.path.isdir(numpy_exercises_data_path + ex_folder):
+            continue;
+        exericse_readings_list = os.listdir(numpy_exercises_data_path + '/' + ex_folder)
+        for exercise_file in exericse_readings_list:
+            exercise = np.load(numpy_exercises_data_path + "/" + ex_folder + '/' + exercise_file)
+            windows_for_exercise = extract_windows(exercise, window_length)
+            windows += windows_for_exercise
+            exercise_code = int(re.sub("[^0-9]", "", exercise_file))
+            current_group = get_group_for_id(exercise_code, config)
+            experience = get_experience_level_for_ex_id(exercise_code, config)
+            for i in range(0, len(windows_for_exercise)):
+                experience_labels.append(experience)
                 groups.append(current_group)
 
     X = np.asarray(windows)
     X = X[:, 1:, :]
-    Y = np.asarray(labels)
+    Y = np.asarray(experience_labels)
     groups = np.asarray(groups)
     if config is not None:
         sensors = config.get("sensors")
@@ -392,15 +471,6 @@ def get_grouped_windows_for_rep_transistion(with_feature_extraction,
 
         X = X[:, sensor_mask, :]
 
-    if with_feature_extraction:
-        X = extract_features(X)
-        X_features = np.nan_to_num(X)
-        return [X_features, Y, groups]
-    else:
-        X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
-        X = np.nan_to_num(X)
-        return [np.transpose(X, (0, 2, 1, 3)), Y, groups]
-
-
-# config = yaml_loader("./config_cnn.yaml")
-# X, Y, groups = get_grouped_windows_for_rep_transistion(False, config)
+    X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
+    X = np.nan_to_num(X)
+    return [np.transpose(X, (0, 2, 1, 3)), Y, groups]

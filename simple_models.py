@@ -8,7 +8,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 
-from data_loading import get_windowed_exerices_feautres_for_training_data
+from cnn_train import split_train_test
 # X, Y = get_reps_features_data()
 # X, Y = get_windowed_exerices_raw_training_data()
 # mask = ~np.isnan(X).any(axis=1)
@@ -183,35 +183,35 @@ config = yaml_loader("./config_cnn.yaml")
 conf_matrix = None
 classes = ["Push ups", "Pull ups", "Burpess", "Deadlifts", "Box jumps", "Squats", "Situps", "WB", "KB Press",
            "Thrusters"]
-for p_test in partipant_to_exercises_codes_map.keys():
-    print("Leaving out " + p_test)
-    train_exercise_codes = []
-    for p in partipant_to_exercises_codes_map:
-        if p == p_test:
-            continue
-        train_exercise_codes += (partipant_to_exercises_codes_map[p])
-    train_features, train_labels, test_features, test_labels = get_windowed_exerices_feautres_for_training_data(True,
-                                                                                                                train_exercise_codes,
-                                                                                                                config)
-    f = open("./reports/report_" + start_time + ".txt", "a+")
-    f.write("Leave out:  %s\r\n" % p_test)
-    f.close()
-    test_predictions = svc(train_features, train_labels, test_features, test_labels)
-    # c = [np.where(r == 1)[0][0] for r in test_labels]
-    cm = confusion_matrix(test_labels, test_predictions)
-    if conf_matrix is not None:
-        if cm.shape != (10, 10):
-            padded_conf_matrix = np.zeros((10, 10)).astype(np.int32)
-            padded_conf_matrix[0:cm.shape[0], 0:cm.shape[1]] = cm
-            cm = padded_conf_matrix
-        conf_matrix = conf_matrix + cm
-    else:
-        if cm.shape != (10, 10):
-            padded_conf_matrix = np.zeros((10, 10)).astype(np.int32)
-            padded_conf_matrix[0:cm.shape[0], 0:cm.shape[1]] = cm
-            cm = padded_conf_matrix
-        conf_matrix = cm
-
-    plot_confusion_matrix(cm, classes, title=p_test)
-
-plot_confusion_matrix(conf_matrix, classes, title="total_matrix")
+# for p_test in partipant_to_exercises_codes_map.keys():
+#     print("Leaving out " + p_test)
+#     train_exercise_codes = []
+#     for p in partipant_to_exercises_codes_map:
+#         if p == p_test:
+#             continue
+#         train_exercise_codes += (partipant_to_exercises_codes_map[p])
+#     train_features, train_labels, test_features, test_labels = get_windowed_exerices_feautres_for_training_data(True,
+#                                                                                                                 train_exercise_codes,
+#                                                                                                                 config)
+#     f = open("./reports/report_" + start_time + ".txt", "a+")
+#     f.write("Leave out:  %s\r\n" % p_test)
+#     f.close()
+#     test_predictions = svc(train_features, train_labels, test_features, test_labels)
+#     # c = [np.where(r == 1)[0][0] for r in test_labels]
+#     cm = confusion_matrix(test_labels, test_predictions)
+#     if conf_matrix is not None:
+#         if cm.shape != (10, 10):
+#             padded_conf_matrix = np.zeros((10, 10)).astype(np.int32)
+#             padded_conf_matrix[0:cm.shape[0], 0:cm.shape[1]] = cm
+#             cm = padded_conf_matrix
+#         conf_matrix = conf_matrix + cm
+#     else:
+#         if cm.shape != (10, 10):
+#             padded_conf_matrix = np.zeros((10, 10)).astype(np.int32)
+#             padded_conf_matrix[0:cm.shape[0], 0:cm.shape[1]] = cm
+#             cm = padded_conf_matrix
+#         conf_matrix = cm
+#
+#     plot_confusion_matrix(cm, classes, title=p_test)
+#
+# plot_confusion_matrix(conf_matrix, classes, title="total_matrix")

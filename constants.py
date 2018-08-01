@@ -45,6 +45,8 @@ EXERCISE_NAME_TO_CLASS_LABEL = {
     "KB Press": 10
 }
 
+CLASS_LABEL_TO_AVERAGE_REP_DURATION = [250, 300, 300, 200, 300, 200, 250, 250, 250, 300]
+
 ACCELEROMETER_CODE = 1
 GYROSCOPE_CODE = 4
 ROTATION_MOTION = 11
@@ -100,6 +102,57 @@ ANKLE_GYRO_Z = 15
 ANKLE_ROT_X = 16
 ANKLE_ROT_Y = 17
 ANKLE_ROT_Z = 18
+
+EXPERIENCE_LEVEL_MAP = {
+    "Viviane des": 2,
+    "Ada def": 3,
+    "Adrian stetter": 3,
+    "Agustin diaz": 2,
+    "Alberto sanchez": 3,
+    "Ale forino": 1,
+    "Alex mil": 1,
+    "Alex turicum": 3,
+    "Andrea Soro": 2,
+    "Anja vont": 2,
+    "Anna fertig": 1,
+    "Beni fueg": 1,
+    "Camilla cav": 2,
+    "Conan obri": 2,
+    "Corneel van": 2,
+    "Damian ga": 2,
+    "Daniel luetolf": 1,
+    "David geiter": 1,
+    "Denis kara": 1,
+    "Denis karatwo": 1,
+    "Desiree Heller": 3,
+    "Donato pari": 2,
+    "Fra lam": 2,
+    "Georg poll": 1,
+    "Karl dei": 3,
+    "Karol Wojtas": 1,
+    "Lara riparip": 1,
+    "Lisa bra": 3,
+    "Llorenc mon": 2,
+    "Lukas hofm": 2,
+    "Marcel feh": 2,
+    "Martin butt": 1,
+    "Matt senn": 3,
+    "Matteo": 1,
+    "Max abe": 2,
+    "Mike jiang": 1,
+    "Muriel haug": 1,
+    "Nick lad": 3,
+    "Ramon fan": 2,
+    "Raphael riedo": 2,
+    "Renata farkas": 3,
+    "Riccardo rigamonti": 3,
+    "Seba curi": 2,
+    "Simon bod": 2,
+    "Simone pira": 3,
+    "Starkaor Hrobjartsson": 2,
+    "Tobi bro": 1,
+    "Virginia Storni": 2
+}
 
 reps_to_keep = {
     "Virginia Storni": {PUSH_UPS: range(2, 16), PULL_UPS: range(2, 11), BURPEES: range(2, 11), DEAD_LIFT: range(2, 22),

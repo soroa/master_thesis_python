@@ -1,12 +1,16 @@
 import itertools
-
+import logging as log
 import matplotlib
+from sklearn import metrics
+
 matplotlib.use("Agg")
 import numpy as np
 import yaml
 from matplotlib import pyplot as plt
 
-
+import pickle
+import time
+import json
 
 
 def yaml_loader(filepath):
@@ -14,7 +18,8 @@ def yaml_loader(filepath):
         data = yaml.load(file_descriptor)
     return data
 
-def yaml_dump(filepath,data):
+
+def yaml_dump(filepath, data):
     with open(filepath, 'w') as file_descriptor:
         yaml.dump(data, file_descriptor)
 
@@ -54,3 +59,65 @@ def plot_confusion_matrix(cm, classes,
     plt.xlabel('Predicted label')
     plt.savefig(title + "_" + start_time + ".png")
     plt.clf()
+
+
+def log_metrics_and_params(results, model_savepath):
+    # log results and save path
+    to_write = {}
+    to_write['results'] = results
+    to_write['model_savepath'] = model_savepath
+    log.info('%s', json.dumps(to_write))
+
+
+def save_model(clf):
+    # save model with timestamp
+    timestring = "".join(str(time.time()).split("."))
+    model_savepath = 'model_' + timestring + '.pk'
+    with open(model_savepath, 'wb') as ofile:
+        pickle.dump(clf, ofile)
+    return model_savepath
+
+
+def get_train_metrics():
+    # currently impossible
+    # X_train and y_train are in higher scopes
+    pass
+
+
+def get_val_metrics(y_pred, y_true):
+    return get_metrics(y_pred, y_true)
+
+
+def get_metrics(y_pred, y_true):
+    # compute more than just one metrics
+
+    chosen_metrics = {
+        # 'conf_mat': metrics.confusion_matrix,
+        'accuracy': metrics.accuracy_score,
+        'auc': metrics.roc_auc_score,
+    }
+
+    results = {}
+    for metric_name, metric_func in chosen_metrics.items():
+        try:
+            inter_res = metric_func(y_pred, y_true)
+        except Exception as ex:
+            inter_res = None
+            log.error("Couldn't evaluate %s because of %s", metric_name, ex)
+        results[metric_name] = inter_res
+
+    # results['conf_mat'] = results['conf_mat'].tolist()
+
+    return results
+
+
+def _my_scorer(clf, X_val, y_true_val):
+    # do all the work and return some of the metrics
+
+    y_pred_val = clf.predict(X_val)
+
+    results = get_val_metrics(y_pred_val, y_true_val)
+    timestring = "".join(str(time.time()).split("."))
+    model_savepath = 'model_' + timestring + '.pk'
+    log_metrics_and_params(results, model_savepath)
+    return results['accuracy']

@@ -2,7 +2,6 @@ import collections
 import os
 import shutil
 import sqlite3
-
 import json
 import matplotlib.pyplot as plt
 
@@ -225,7 +224,7 @@ def prepare_data():
             ex_id = get_exercises_id_for_participant_and_code(db_wrist, p[0], code)
             print(str(code) + str(p) + " ex id "+ str(ex_id))
             save_exercise_npy(interpolated_exercise_readings, code, ex_id[0])
-            # reps
+            # repsd
             single_reps_readings_wrist = get_sub_readings_from_readings_for_wrist(wrist_readings)
             single_reps_readings_ankle = derive_sub_readings_for_ankle_from_wrist(single_reps_readings_wrist,
                                                                                   ankle_readings)
@@ -281,13 +280,13 @@ def interpolate_readings(wrist_readings, ankle_readings):
     timestamps_wrist = extract_timestamps(wrist_readings)
     timestamps_ankle = extract_timestamps(ankle_readings)
     #####
-    if withPlots:
-        plt.subplot(3, 1, 1)
-        plt.suptitle("interpolating in cleaning: preprocessed data")
-        timestamps_w_a = acc_readings_w[:, 4].astype("int64")
-        timestamps_w_a = timestamps_w_a - timestamps_w_a[0]
-        plt.plot(timestamps_w_a, acc_readings_values_w[:,2])
-        ####
+    # if withPlots:
+    #     plt.subplot(3, 1, 1)
+    #     plt.suptitle("interpolating in cleaning: preprocessed data")
+    #     timestamps_w_a = acc_readings_w[:, 4].astype("int64")
+    #     timestamps_w_a = timestamps_w_a - timestamps_w_a[0]
+    #     plt.plot(timestamps_w_a, acc_readings_values_w[:,2])
+    #     ####
     start_timestamp = 0
 
     end_timestamp = min(np.max(timestamps_wrist), np.max(timestamps_ankle))
@@ -312,10 +311,10 @@ def interpolate_readings(wrist_readings, ankle_readings):
                                    values_list[i][:, 2])
         interpolated_x = interpolated_x.reshape(interpolated_x.shape[0], 1)
         ###
-        if withPlots:
-            if(i==0):
-                plt.subplot(3, 1, 2)
-                plt.plot(equaly_spaced_apart_timestamps, interpolated_z)
+        # if withPlots:
+        #     if(i==0):
+        #         plt.subplot(3, 1, 2)
+        #         plt.plot(equaly_spaced_apart_timestamps, interpolated_z)
             # ##
         interpolated_y = interpolated_y.reshape(interpolated_y.shape[0], 1)
         interpolated_z = interpolated_z.reshape(interpolated_z.shape[0], 1)
@@ -324,11 +323,11 @@ def interpolate_readings(wrist_readings, ankle_readings):
         interpolated_readings[1 + current_indexs * 3: 1 + current_indexs * 3 + 3, :] = concatenate
         current_indexs += 1
 
-    if withPlots:
-        plt.subplot(3, 1, 3)
-        plt.plot(equaly_spaced_apart_timestamps, interpolated_readings[3,:])
-        plt.show()
-        plt.clf()
+    # if withPlots:
+    #     plt.subplot(3, 1, 3)
+    #     plt.plot(equaly_spaced_apart_timestamps, interpolated_readings[3,:])
+    #     plt.show()
+    #     plt.clf()
     return interpolated_readings
 
 
@@ -802,6 +801,7 @@ def remove_dirty_reps():
 
         db.commit()
         c.close()
+
 
 # split_wrist_ankle_and_merge()
 # do_common_preprocessing()

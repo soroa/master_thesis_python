@@ -1,6 +1,5 @@
 # set the matplotlib backend so figures can be saved in the background
 import argparse
-import datetime
 import os
 
 # leave this line
@@ -10,9 +9,8 @@ from keras.wrappers.scikit_learn import KerasClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import GridSearchCV, GroupShuffleSplit
 
+from rep_counting import count_predicted_reps, count_real_reps
 from utils import *
-
-# leave this line
 
 now = datetime.datetime.now()
 start_time = now.strftime("%Y-%m-%d %H:%M")
@@ -35,7 +33,7 @@ from keras.layers import Activation, Flatten, Dropout, Dense, Convolution2D, K, 
 from keras.optimizers import SGD
 from keras.utils import np_utils, multi_gpu_model
 
-from data_loading import get_grouped_windows_for_exerices, get_grouped_windows_for_rep_transistion
+from data_loading import get_grouped_windows_for_exerices, get_grouped_windows_for_rep_transistion_per_exercise
 from keras.backend.tensorflow_backend import set_session
 
 tf_config = tf.ConfigProto()
@@ -193,10 +191,10 @@ def model_II(input_shape):
 
 
 def model_I(input_shape,
-            conv_layer_1_filters=50, dropout_1=0.5,
-            conv_layer_2_filters=100, dropout_2=0.5,
-            conv_layer_3_filters=25, dropout_3=0.5,
-            conv_layer_4_filters=50, dropout_4=0.5,
+            conv_layer_1_filters=100, dropout_1=0.5,
+            conv_layer_2_filters=25, dropout_2=0.5,
+            conv_layer_3_filters=75, dropout_3=0.5,
+            conv_layer_4_filters=75, dropout_4=0.5,
             conv_layer_5_filters=25, dropout_5=0.5,
             inner_dense_layer_neurons=250):
     K.clear_session()
@@ -228,7 +226,7 @@ def model_I(input_shape,
     model.add(Dropout(dropout_5))
     model.add(Flatten())
     model.add(Dense(inner_dense_layer_neurons))
-    model.add(Dense(nb_classes))
+    model.add(Dense(nb_classes+1))
     model.add(Activation('softmax'))
     # plot_model(model, show_shapes=True, to_file='model.png')
     sgd = SGD(lr=0.0001, nesterov=True, decay=1e-6, momentum=0.9)
@@ -245,16 +243,46 @@ def model_I(input_shape,
 
 
 def model_rep_transistions(input_shape,
-                           conv_layer_1_filters=55, dropout_1=0.6,
+                           dropout_1=0.5,
                            inner_dense_layer_neurons=250, n_classes=nb_classes):
     # sensor data
     conv_input = Input(shape=input_shape)
-    conv_output = Convolution2D(filters=conv_layer_1_filters, kernel_size=(10, 15), strides=(3, 1),
+    ##### 1
+    conv_output = Convolution2D(filters=100, kernel_size=(10, 15), strides=(3, 1),
                                 input_shape=input_shape,
                                 border_mode='same',
                                 data_format="channels_last")(conv_input)
     act = Activation('relu')(conv_output)
     after_dropout = Dropout(dropout_1)(act)
+    ##### 2
+    conv_output = Convolution2D(filters=25, kernel_size=(10, 15), strides=(3, 1),
+                                input_shape=input_shape,
+                                border_mode='same',
+                                data_format="channels_last")(after_dropout)
+    act = Activation('relu')(conv_output)
+    after_dropout = Dropout(dropout_1)(act)
+    ##### 3
+    conv_output = Convolution2D(filters=75, kernel_size=(10, 15), strides=(3, 1),
+                                input_shape=input_shape,
+                                border_mode='same',
+                                data_format="channels_last")(after_dropout)
+    act = Activation('relu')(conv_output)
+    after_dropout = Dropout(dropout_1)(act)
+    ##### 4
+    conv_output = Convolution2D(filters=75, kernel_size=(10, 15), strides=(3, 1),
+                                input_shape=input_shape,
+                                border_mode='same',
+                                data_format="channels_last")(after_dropout)
+    act = Activation('relu')(conv_output)
+    after_dropout = Dropout(dropout_1)(act)
+    ##### 5
+    conv_output = Convolution2D(filters=25, kernel_size=(10, 15), strides=(3, 1),
+                                input_shape=input_shape,
+                                border_mode='same',
+                                data_format="channels_last")(after_dropout)
+    act = Activation('relu')(conv_output)
+    after_dropout = Dropout(dropout_1)(act)
+
     flattened = Flatten()(after_dropout)
 
     label_input = Input(shape=(1,))
@@ -262,11 +290,12 @@ def model_rep_transistions(input_shape,
     # Merge and add dense layer
     merge_layer = concatenate([label_input, flattened])
     pre_output = Dense(inner_dense_layer_neurons)(merge_layer)
-    output = (Dense(n_classes))(pre_output)
-    output = Activation('softmax')(output)
+    merge_layer_2 = concatenate([label_input, pre_output])
+    output = (Dense(n_classes))(merge_layer_2)
+    output2 = Activation('softmax')(output)
 
     # Define model with two inputs
-    model = Model(inputs=[conv_input, label_input], outputs=[output])
+    model = Model(inputs=[conv_input, label_input], outputs=[output2])
     sgd = SGD(lr=0.0001, nesterov=True, decay=1e-6, momentum=0.9)
     model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
     return model
@@ -403,17 +432,18 @@ def train(X_train, y_train, X_test, y_test, left_out_participant="", conf_matrix
 
 
 def grid_search_over_window_size():
-    for wl in [1000, 2000, 3000, 4000, 5000]:
+    for wl in [1000, 1500, 2000, 3000, 4000]:
         print('testing w: ' + str(wl))
-        X, Y, groups = get_grouped_windows_for_exerices(False, config, window_length=wl)
+        X, Y, groups = get_grouped_windows_for_exerices(False, config, window_length=wl,augumentation=True)
         (train, test) = split_train_test(X, Y, groups)
         model = model_I((train[0].shape[1], train[0].shape[2], 1))
         model.fit(train[0], train[1], epochs=config.get("cnn_params")['epochs'], validation_data=(test[0], test[1]),
                   batch_size=config.get("cnn_params")['batch_size'], )
+        model.save("recognition_model_wl_" + str(wl) + ".h5")
 
 
 def split_train_test(X, y, groups, n_classes=nb_classes, extra_features=None):
-    gss = GroupShuffleSplit(test_size=0.2)
+    gss = GroupShuffleSplit(test_size=0.1)
     train_indexes, test_indexes = gss.split(X, y, groups=groups).next()
     X_train = X[train_indexes]
     y_train = np_utils.to_categorical(y[train_indexes] - 1, n_classes)
@@ -429,32 +459,128 @@ def split_train_test(X, y, groups, n_classes=nb_classes, extra_features=None):
     return ((X_train, y_train, groups_train), (X_test, y_test, groups_test))
 
 
-if __name__ == "__main__":
-    X, Y, classes, groups = get_grouped_windows_for_rep_transistion(False, config, use_exercise_code_as_group=True)
-    (tra, test) = split_train_test(X, Y, groups, n_classes=2, extra_features=classes)
-    for t in test[2]:
-        s = ""
-        if t[0] == 0:
-            s += "0"
-        else:
-            s += "1"
-    print(s)
-    model = model_rep_transistions((tra[0].shape[1], tra[0].shape[2], 1), n_classes=2)
-    model.fit([tra[0], tra[1]], tra[2], epochs=config.get("cnn_params")['epochs'],
-              # validation_data=(test[0], test[1]),
-              batch_size=config.get("cnn_params")['batch_size'],
-              # callbacks=[history, early_stopping])
-              )
-    groups = np.unique(test[3])
-    np.set_printoptions(linewidth=np.inf)
-    for g in groups:
-        indexes = np.argwhere(tra[0] == g)
-        x = test[0][indexes]
-        preds = model.predict(tra[0])
-        print(test[2][indexes,0])
-        print(preds[0][:,0])
+def rep_counting_training():
+    data_per_exercise = get_grouped_windows_for_rep_transistion_per_exercise(config, True)
+    f = open("./reports/single_exercise_rep_counting" + start_time + ".tx"
+                                                                     "t", "a+")
+    for ex in data_per_exercise.keys():
+        # X, Y, classes, groups = get_grouped_windows_for_rep_transistion(False, config, use_exercise_code_as_group=True)
+        X, classes, Y, groups = data_per_exercise[ex]
+        (tra, test) = split_train_test(X, Y, groups, n_classes=2, extra_features=classes)
+        np.set_printoptions(linewidth=np.inf)
 
-    # X, Y, groups = get_grouped_windows_for_exerices(False, config)
+        if len(gpus) <= 1:
+            print("[INFO] training with 1 GPU...")
+            model = model_rep_transistions((tra[0].shape[1], tra[0].shape[2], 1), n_classes=2)
+        # otherwise, we are compiling using multiple GPUs
+        else:
+            print("[INFO] training with {} GPUs...".format(gpus))
+
+            # we'll store a copy of the model on *every* GPU and then combine
+            # the results from the gradient updates on the CPU
+            with tf.device("/cpu:0"):
+                # initialize the model
+                model = model_rep_transistions((tra[0].shape[1], tra[0].shape[2], 1), n_classes=2)
+
+            # make the model parallel
+            model = multi_gpu_model(model, gpus=len(gpus))
+
+        sgd = SGD(lr=0.0001, nesterov=True, decay=1e-6, momentum=0.9)
+        model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+        history = model.fit([tra[0], tra[1]], tra[2], epochs=config.get("cnn_params")['epochs'],
+                            validation_data=([test[0], test[1]], test[2]),
+                            batch_size=config.get("cnn_params")['batch_size'],
+                            # callbacks=[history, early_stopping])
+                            )
+        plot_learning_curves(history, file_name=str(ex))
+        model.save("recognition_model_" + ex + ".h5")
+        f.write((ex) + "\n")
+
+        groups = np.unique(test[3])
+        np.set_printoptions(linewidth=np.inf)
+        errors = 0
+        total_truth_reps = 0
+        f.write("val acc " + str(history.history['val_acc'][-1]) + "\n")
+        f.write("acc " + str(history.history['acc'][-1]) + "\n")
+        for g in groups:
+            f.write("ex id " + str(g) + "\n")
+            indexes = np.argwhere(test[3] == g)
+            x = test[0][indexes, :, :, :]
+            x = np.squeeze(x)
+            x = x.reshape((x.shape[0], x.shape[1], x.shape[2], 1))
+            x_extra = test[1][indexes, :]
+            x_extra = np.squeeze(x_extra, axis=2)
+            preds = model.predict([x, x_extra])
+            truth = test[2][indexes, 0].astype(np.int32).ravel()
+            preds = 1 - preds.argmax(axis=1)
+            reps_truth = count_real_reps(truth)
+            reps_pred = count_predicted_reps(preds)
+            total_truth_reps += reps_truth
+            abs_err = abs(reps_truth - reps_pred)
+            errors += abs_err
+
+            f.write("*****************\n")
+            f.write(str(truth) + "\n")
+            f.write(str(preds) + "\n")
+            f.write("*****************\n")
+            f.write("predicted " + str(reps_pred) + "\n")
+            f.write("truth " + str(reps_truth) + "\n")
+            f.write("difference " + str(reps_pred - reps_truth) + "\n")
+        # f.write(truth)
+        # f.write(preds)
+        f.write('errors: ' + str(errors) + "\n")
+        f.write('total reps: ' + str(total_truth_reps) + "\n")
+        f.write("Relative total error " + str(float(errors / total_truth_reps)) + "\n")
+        f.write("\n")
+        f.write("\n")
+        f.write("\n")
+    f.close()
+
+
+def best_rep_counting_models():
+    data_per_exercise = get_grouped_windows_for_rep_transistion_per_exercise(config, True)
+    for ex in data_per_exercise.keys():
+        X, classes, Y, groups = data_per_exercise[ex]
+        Y = np_utils.to_categorical(Y - 1, 2)
+
+        if len(gpus) <= 1:
+            print("[INFO] training with 1 GPU...")
+            model = model_rep_transistions((X.shape[1], X.shape[2], 1), n_classes=2)
+        # otherwise, we are compiling using multiple GPUs
+        else:
+            print("[INFO] training with {} GPUs...".format(gpus))
+
+            # we'll store a copy of the model on *every* GPU and then combine
+            # the results from the gradient updates on the CPU
+            with tf.device("/cpu:0"):
+                # initialize the model
+                model = model_rep_transistions((X.shape[1], X.shape[2], 1), n_classes=2)
+
+            # make the model parallel
+            model = multi_gpu_model(model, gpus=len(gpus))
+
+        sgd = SGD(lr=0.0001, nesterov=True, decay=1e-6, momentum=0.9)
+        model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+        model.fit([X, classes], Y, epochs=config.get("cnn_params")['epochs'],
+                  batch_size=config.get("cnn_params")['batch_size'])
+        model.save("rep_counting_model_" + ex + ".h5")
+
+
+def best_recognition_model():
+    X, Y, groups = get_grouped_windows_for_exerices(False, config,augumentation=True)
     # (tra, test) = split_train_test(X, Y, groups)
-    # model = model_I((tra[0].shape[1], tra[0].shape[2], 1))
-    # grid_search(model_I, tra[0], tra[1], tra[2])
+
+    print(np.unique(Y))
+    Y = np_utils.to_categorical(Y - 1, nb_classes+1)
+    model = model_I((X.shape[1], X.shape[2], 1))
+    model.fit(X, Y, epochs=config.get("cnn_params")['epochs'],
+              batch_size=config.get("cnn_params")['batch_size']
+              # callbacks=[history, early_stopping])
+              # callbacks=[history]
+              )
+    model.save("recognition_model_with_null.h5")
+
+
+if __name__ == "__main__":
+    best_recognition_model()
+    # grid_search_over_window_size()

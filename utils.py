@@ -1,5 +1,7 @@
+import datetime
 import itertools
 import logging as log
+
 import matplotlib
 from sklearn import metrics
 
@@ -121,3 +123,25 @@ def _my_scorer(clf, X_val, y_true_val):
     model_savepath = 'model_' + timestring + '.pk'
     log_metrics_and_params(results, model_savepath)
     return results['accuracy']
+
+
+def plot_learning_curves(history, file_name):
+    # summarize history for accuracy
+    now = datetime.datetime.now()
+    start_time = now.strftime("%Y-%m-%d %H:%M")
+    plt.clf()
+    plt.plot(history.history['acc'])
+    plt.plot(history.history['val_acc'])
+    plt.title('model accuracy')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.savefig("reports/learning_curves_" + file_name + str(start_time) + ".png")
+    # summarize history for loss
+    # plt.plot(history.history['loss'])
+    # plt.plot(history.history['val_loss'])
+    # plt.title('model loss')
+    # plt.ylabel('loss')
+    # plt.xlabel('epoch')
+    # plt.legend(['train', 'test'], loc='upper left')
+    # plt.show()

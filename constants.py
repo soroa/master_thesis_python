@@ -10,6 +10,9 @@ KETTLEBELL_SQUAT_PRESS = 8
 KETTLEBELL_PRESS = 9
 CRUNCHES = 11
 WALL_BALLS = 12
+NULL_CLASS = 16
+SPEED_WORKOUT = 14
+EXECUTION_WORKOUT = 15
 
 WORKOUT = [PUSH_UPS, PULL_UPS, BURPEES, DEAD_LIFT, BOX_JUMPS, SQUATS, CRUNCHES, WALL_BALLS,
            KETTLEBELL_PRESS, KETTLEBELL_SQUAT_PRESS]
@@ -29,7 +32,8 @@ EXERCISE_CODES_TO_NAME = {
     KETTLEBELL_SQUAT_PRESS: "KB Squat press",
     KETTLEBELL_PRESS: "KB Press",
     CRUNCHES: "Crunches",
-    WALL_BALLS: "Wall balls"
+    WALL_BALLS: "Wall balls",
+    NULL_CLASS: "Null"
 }
 
 EXERCISE_NAME_TO_CLASS_LABEL = {
@@ -42,7 +46,22 @@ EXERCISE_NAME_TO_CLASS_LABEL = {
     "Crunches": 7,
     "Wall balls": 8,
     "KB Squat press": 9,
-    "KB Press": 10
+    "KB Press": 10,
+    "Null": 11,
+}
+
+EXERCISE_CLASS_LABEL_TO_NAME = {
+    1: "Push ups",
+    2: "Pull ups",
+    3: "Burpees",
+    4: "Dead lifts",
+    5: "Box jumps",
+    6: "Squats",
+    7: "Crunches",
+    8: "Wall balls",
+    9: "KB Squat press",
+    10: "KB Press",
+    11: "Null"
 }
 
 CLASS_LABEL_TO_AVERAGE_REP_DURATION = [250, 300, 300, 200, 300, 200, 250, 250, 250, 300]
@@ -74,6 +93,9 @@ READING_TIMESTAMP = 4
 READING_PLACEMENT = 5
 READING_REP = 6
 
+
+EXERCISE_ID = 0
+
 READINGS_TABLE_NAME = "sensor_readings"
 EXERCISES_TABLE_NAME = "exercises"
 WORKOUTS_TABLE_NAME = "workout_sessions"
@@ -83,25 +105,33 @@ POSITION_ANKLE = "ankle"
 SMARTWATCH_POSITIONS = [POSITION_WRIST, POSITION_ANKLE]
 
 # Numpy data
-WRIST_ACCEL_X = 1
-WRIST_ACCEL_Y = 2
-WRIST_ACCEL_Z = 3
-WRIST_GYRO_X = 4
-WRIST_GYRO_Y = 5
-WRIST_GYRO_Z = 6
-WRIST_ROT_X = 7
-WRIST_ROT_Y = 8
-WRIST_ROT_Z = 9
+WRIST_ACCEL_X = 0
+WRIST_ACCEL_Y = 1
+WRIST_ACCEL_Z = 2
+WRIST_GYRO_X = 3
+WRIST_GYRO_Y = 4
+WRIST_GYRO_Z = 5
+WRIST_ROT_X = 6
+WRIST_ROT_Y = 7
+WRIST_ROT_Z = 8
 
-ANKLE_ACCEL_X = 10
-ANKLE_ACCEL_Y = 11
-ANKLE_ACCEL_Z = 12
+ANKLE_ACCEL_X = 9
+ANKLE_ACCEL_Y = 10
+ANKLE_ACCEL_Z = 11
 ANKLE_GYRO_X = 12
-ANKLE_GYRO_Y = 14
-ANKLE_GYRO_Z = 15
-ANKLE_ROT_X = 16
-ANKLE_ROT_Y = 17
-ANKLE_ROT_Z = 18
+ANKLE_GYRO_Y = 13
+ANKLE_GYRO_Z = 14
+ANKLE_ROT_X = 15
+ANKLE_ROT_Y = 16
+ANKLE_ROT_Z = 17
+
+SENSOR_CHANNELS = [WRIST_ACCEL_X, WRIST_ACCEL_Y, WRIST_ACCEL_Z,
+                   WRIST_GYRO_X, WRIST_GYRO_Y, WRIST_GYRO_Z,
+                   WRIST_ROT_X, WRIST_ROT_Y, WRIST_ROT_Z,
+                   #ANKLE
+                   ANKLE_ACCEL_X, ANKLE_ACCEL_Y, ANKLE_ACCEL_Z,
+                   ANKLE_GYRO_X, ANKLE_GYRO_Y, ANKLE_GYRO_Z,
+                   ANKLE_ROT_X, ANKLE_ROT_Y, ANKLE_ROT_Z]
 
 EXPERIENCE_LEVEL_MAP = {
     "Viviane des": 2,
@@ -275,7 +305,11 @@ reps_to_keep = {
     "Ramon fan": {PUSH_UPS: None, PULL_UPS: None, BURPEES: None, DEAD_LIFT: range(1, 12), BOX_JUMPS: None, SQUATS: None,
                   CRUNCHES: None, WALL_BALLS: None, KETTLEBELL_PRESS: None, KETTLEBELL_SQUAT_PRESS: None}
 }
+
+
 copy_from_path = "./dbs/"
 path = "./dbs2/"
+test_path = "./free_workout_data/db/"
+null_data_path = "./null_class_data/db/"
 numpy_reps_data_path = "./data/np_reps_data/"
 numpy_exercises_data_path = "./data/np_exercise_data/"

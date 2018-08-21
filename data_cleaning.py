@@ -1,16 +1,18 @@
 import collections
+import json
 import os
 import shutil
 import sqlite3
-import json
+
 import matplotlib.pyplot as plt
 
-from constants import *
-from constants import copy_from_path, path, numpy_reps_data_path, numpy_exercises_data_path
+from constants import path, READING_VALUES, READING_SENSOR_TYPE, ACCELEROMETER_CODE, GYROSCOPE_CODE, ROTATION_MOTION, \
+    READING_TIMESTAMP, numpy_exercises_data_path, WORKOUT, READING_REP, READING_ID, numpy_reps_data_path, \
+    SENSOR_TO_VAR_COUNT, SENSOR_TO_NAME, reps_to_keep, SMARTWATCH_POSITIONS, DELAYS, NULL_CLASS
 from db_functions import *
-from plot import addRepSeparators, interpolate
+from plot import addRepSeparators
 
-tables = [WORKOUTS_TABLE_NAME, EXERCISES_TABLE_NAME, READINGS_TABLE_NAME]
+TABLES = [WORKOUTS_TABLE_NAME, EXERCISES_TABLE_NAME, READINGS_TABLE_NAME]
 reversed_ankle_watch_participant_ids = [42, 50, 51, 52, 53, 54, 57, 60, 62, 64, 65, 67, 68, 69]
 
 
@@ -18,6 +20,7 @@ def split_wrist_ankle_and_merge():
     for file in os.listdir(path):
         os.remove(path + file)
 
+    from constants import copy_from_path
     for file in os.listdir(copy_from_path):
         shutil.copyfile(copy_from_path + file, path + file)
 
@@ -49,7 +52,7 @@ def merge_databases(names, position):
         print(name)
         db = sqlite3.connect(path + name)
         current_participant_cursor = db.cursor()
-        for table in tables:
+        for table in TABLES:
             print(table)
             current_participant_cursor.execute('SELECT * FROM {tn}'.format(tn=table))
             readings = current_participant_cursor.fetchall()  # Returns the results as a list.
@@ -201,14 +204,13 @@ def check_synchrony():
     db_ankle.commit()
 
 
-###
-
 def prepare_data():
     shutil.rmtree(numpy_exercises_data_path, ignore_errors=True)
     shutil.rmtree(numpy_reps_data_path, ignore_errors=True)
     db_wrist = sqlite3.connect(path + "/merged_wrist")
     db_ankle = sqlite3.connect(path + "/merged_ankle")
     partipant_to_exercises_codes_map = {}
+    WORKOUT.append(NULL_CLASS)
     for code in WORKOUT:
         partipants = get_participants(db_wrist)
         for p in partipants:
@@ -221,8 +223,10 @@ def prepare_data():
             if (not were_all_sensors_recorded(ankle_readings) or not were_all_sensors_recorded(wrist_readings)):
                 continue
             interpolated_exercise_readings = interpolate_readings(wrist_readings, ankle_readings)
+            print(code)
+            print('shape: ' + str(interpolated_exercise_readings.shape))
             ex_id = get_exercises_id_for_participant_and_code(db_wrist, p[0], code)
-            print(str(code) + str(p) + " ex id "+ str(ex_id))
+            print(str(code) + str(p) + " ex id " + str(ex_id))
             save_exercise_npy(interpolated_exercise_readings, code, ex_id[0])
             # repsd
             single_reps_readings_wrist = get_sub_readings_from_readings_for_wrist(wrist_readings)
@@ -315,7 +319,7 @@ def interpolate_readings(wrist_readings, ankle_readings):
         #     if(i==0):
         #         plt.subplot(3, 1, 2)
         #         plt.plot(equaly_spaced_apart_timestamps, interpolated_z)
-            # ##
+        # ##
         interpolated_y = interpolated_y.reshape(interpolated_y.shape[0], 1)
         interpolated_z = interpolated_z.reshape(interpolated_z.shape[0], 1)
         concatenate = np.concatenate(
@@ -328,7 +332,7 @@ def interpolate_readings(wrist_readings, ankle_readings):
     #     plt.plot(equaly_spaced_apart_timestamps, interpolated_readings[3,:])
     #     plt.show()
     #     plt.clf()
-    return interpolated_readings
+    return interpolated_readings[1:, :]
 
 
 def extract_sensor_readings_values(readings):
@@ -472,7 +476,6 @@ def plot_raw_versus_interpolated(exId, exerciseCode, sensorType=ACCELEROMETER_CO
         sensorReadingData[i] = vals
         i = i + 1
 
-
     timestamps = table[:, 4].astype("int64")
     timestamps = timestamps - timestamps[0]
 
@@ -485,7 +488,7 @@ def plot_raw_versus_interpolated(exId, exerciseCode, sensorType=ACCELEROMETER_CO
     addRepSeparators(plt, rep_starts, timestamps)
 
     plt.plot(timestamps, sensorReadingData[:, 2], 'r-')
-    equaly_spaced_apart_timestamps = np.array(list(range(0, timestamps[timestamps.shape[0]-1], 10)))
+    equaly_spaced_apart_timestamps = np.array(list(range(0, timestamps[timestamps.shape[0] - 1], 10)))
 
     interpolated_x = np.interp(equaly_spaced_apart_timestamps, timestamps,
                                sensorReadingData[:, 2])
@@ -496,7 +499,6 @@ def plot_raw_versus_interpolated(exId, exerciseCode, sensorType=ACCELEROMETER_CO
     # addRepSeparators(plt, rep_starts, timestamps)
 
     plt.plot(equaly_spaced_apart_timestamps, interpolated_x, 'b-')
-
 
     # plt.subplot(4, 1, 3)
     # plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
@@ -655,6 +657,16 @@ def print_workout_info():
         print(key + " : " + str(value))
 
 
+def print_workout_info2():
+    reps_folders = os.listdir(numpy_reps_data_path)
+    name_to_rep_count = {}
+    for rep_folder in reps_folders:
+        reps_readings_list = os.listdir(numpy_reps_data_path + '/' + rep_folder)
+        name_to_rep_count[rep_folder] = len(reps_readings_list)
+    for key, value in sorted(name_to_rep_count.iteritems(), key=lambda (k, v): (v, k)):
+        print "%s: %s" % (key, value)
+
+
 def remove_1_2_rep_exercises(position):
     print("\n")
     print("**** REMOVING ONE REP EXERCISES... ***** ")
@@ -803,6 +815,32 @@ def remove_dirty_reps():
         c.close()
 
 
+def add_to_merged_db(source, dest):
+    merged_db = sqlite3.connect(dest)
+    merged_cursor = merged_db.cursor()
+
+    db = sqlite3.connect(source)
+    current_participant_cursor = db.cursor()
+    for table in TABLES:
+        print(table)
+        current_participant_cursor.execute('SELECT * FROM {tn}'.format(tn=table))
+        readings = current_participant_cursor.fetchall()  # Returns the results as a list.
+        for r in readings:
+            if table is READINGS_TABLE_NAME:
+                values_placeholder = "?,?,?,?,?,?,?"
+            elif table is EXERCISES_TABLE_NAME:
+                values_placeholder = "?,?,?,?,?"
+            elif table is WORKOUTS_TABLE_NAME:
+                values_placeholder = "?,?,?,?,?"
+            merged_cursor.execute('INSERT INTO {tn} VALUES({values_placeholder})'.format(tn=table,
+                                                                                             values_placeholder=values_placeholder),
+                                      r)
+    current_participant_cursor.close()
+    merged_db.commit()
+    merged_cursor.close()
+
+
 # split_wrist_ankle_and_merge()
 # do_common_preprocessing()
 # prepare_data()
+# print_workout_info2()

@@ -7,8 +7,8 @@ import matplotlib
 
 from constants import numpy_exercises_data_path, EXERCISE_NAME_TO_CLASS_LABEL, numpy_reps_data_path, test_path, \
     EXPERIENCE_LEVEL_MAP, READINGS_TABLE_NAME, EXERCISE_CLASS_LABEL_TO_NAME, EXECUTION_WORKOUT, EXERCISES_TABLE_NAME, \
-    EXERCISE_ID
-from data_augumentation import stretch_compress_windows
+    EXERCISE_ID, MIN_REP_DURATION_MAP
+from data_augumentation import stretch_compress_exercise_readings
 
 matplotlib.use("Agg")
 from scipy.stats import mode
@@ -68,8 +68,12 @@ def get_grouped_windows_for_exerices(with_feature_extraction,
             print(exercise_file)
             exercise = np.load(numpy_exercises_data_path + "/" + ex_folder + '/' + exercise_file)
             if augumentation:
-                windows_for_exercise = stretch_compress_windows(windows_for_exercise)
-            windows_for_exercise = extract_windows(exercise, window_length)
+                rescaled_versions = stretch_compress_exercise_readings(exercise)
+                windows_for_exercise = []
+                for version in rescaled_versions:
+                    windows_for_exercise += (extract_windows(version, window_length, step=0.10))
+            else:
+                windows_for_exercise = extract_windows(exercise, window_length, step=0.05)
             windows += windows_for_exercise
             exercise_code = int(re.sub("[^0-9]", "", exercise_file))
             current_group = get_group_for_id(exercise_code, config)
@@ -130,7 +134,7 @@ def get_exercise_readings():
     a = True
     for ex_folder in ex_folders:
         if not os.path.isdir(numpy_exercises_data_path + ex_folder):
-            continue;
+            continue
         exericse_readings_list = os.listdir(numpy_exercises_data_path + '/' + ex_folder)
         label = EXERCISE_NAME_TO_CLASS_LABEL[ex_folder]
         for exercise_file in exericse_readings_list:
@@ -173,7 +177,7 @@ def get_reps_with_features():
             rep = np.load(numpy_reps_data_path + "/" + ex + '/' + r_name)
             rep_features = extract_features_for_single_reading(rep[1:, :]).reshape((1, 150))
             rep_ex_id_plus_rep_num = re.sub("[^0-9]", "", r_name)
-            rep_ex_id = rep_ex_id_plus_rep_num[0:len(rep_ex_id_plus_rep_num) - 1]
+            rep_ex_id = rep_ex_id_plus_rep_num[0:len(rep_exs_id_plus_rep_num) - 1]
             if rep_ex_id in train_ids:
                 reps_train = np.append(reps_train, rep_features, axis=0)
                 labels_train = np.append(labels_train, label)
@@ -314,7 +318,7 @@ def get_reps_duration_map():
     return ex_code_to_rep_count_map
 
 
-def get_min_rep_duration_map():
+def get_min_rep_duration_map(augmentation=False):
     reps_folders = os.listdir(numpy_reps_data_path)
     seen_ex_ids = []
     ex_code_to_rep_count_map = {}
@@ -332,6 +336,8 @@ def get_min_rep_duration_map():
                     continue
                 if rep_folder not in ex_code_to_rep_count_map.keys() or ex_code_to_rep_count_map[
                     rep_folder] > len_rounded:
+                    if augmentation:
+                        len_rounded = len_rounded / 2
                     ex_code_to_rep_count_map[rep_folder] = len_rounded
     print(ex_code_to_rep_count_map)
     return ex_code_to_rep_count_map
@@ -349,13 +355,12 @@ def does_window_contain_rep_start(window_endtime, rep_duration, rep_start_durati
     return False
 
 
-def get_exercise_labeled_transition_windows(exercise_reading, window_length_in_ms, exercise_code, transition_duration,
-                                            ex_code_class=None, with_ex_code_as_feature=False):
+def get_exercise_labeled_start_windows(exercise_reading, window_length_in_ms, exercise_code, transition_duration,
+                                       ex_code_class=None, with_ex_code_as_feature=False, slide_step_perc=0.10):
     reps_duration_map = get_reps_duration_map()
     rep_duration = reps_duration_map[exercise_code]
     windows = []
     labels = []
-    slide_step_perc = 0.10
     for start in range(0, exercise_reading.shape[1] - int(window_length_in_ms / 10),
                        int(window_length_in_ms / 10 * slide_step_perc)):
         stop = start + int(window_length_in_ms / 10)
@@ -415,13 +420,13 @@ def get_grouped_windows_for_rep_transistion(with_feature_extraction,
             exercise = np.load(numpy_exercises_data_path + "/" + ex_folder + '/' + exercise_file)
             exercise_code = int(re.sub("[^0-9]", "", exercise_file))
 
-            (windows_for_exercise, transition_labels_for_ex) = get_exercise_labeled_transition_windows(exercise,
-                                                                                                       window_length_in_ms,
-                                                                                                       exercise_code,
-                                                                                                       rep_transition_duration,
-                                                                                                       EXERCISE_NAME_TO_CLASS_LABEL[
-                                                                                                           ex_folder],
-                                                                                                       with_ex_code_as_feature=False)
+            (windows_for_exercise, transition_labels_for_ex) = get_exercise_labeled_start_windows(exercise,
+                                                                                                  window_length_in_ms,
+                                                                                                  exercise_code,
+                                                                                                  rep_transition_duration,
+                                                                                                  EXERCISE_NAME_TO_CLASS_LABEL[
+                                                                                                      ex_folder],
+                                                                                                  with_ex_code_as_feature=False)
             windows += windows_for_exercise
             transition_labels += transition_labels_for_ex
             if use_exercise_code_as_group:
@@ -475,7 +480,7 @@ def get_experience_level_data(config):
     experience_labels = []
     for ex_folder in ex_folders:
         if not os.path.isdir(numpy_exercises_data_path + ex_folder):
-            continue;
+            continue
         exericse_readings_list = os.listdir(numpy_exercises_data_path + '/' + ex_folder)
         for exercise_file in exericse_readings_list:
             exercise = np.load(numpy_exercises_data_path + "/" + ex_folder + '/' + exercise_file)
@@ -517,17 +522,21 @@ def get_experience_level_data(config):
     return [np.transpose(X, (0, 2, 1, 3)), Y, groups]
 
 
-def get_grouped_windows_for_rep_transistion_per_exercise(config=None, use_exercise_code_as_group=False):
-    min_rep_duration_map = get_min_rep_duration_map()
+def get_grouped_windows_for_rep_transistion_per_exercise(training_params, config=None, use_exercise_code_as_group=False,
+                                                         augmentation=False, exercises=None):
     ex_folders = os.listdir(numpy_exercises_data_path)
 
     tot = {}
     for ex_folder in ex_folders:
+        if ex_folder == "Null":
+            continue
+        if exercises is not None and ex_folder not in exercises:
+            continue
         groups = []
         windows = []
         transition_labels = []
         classes = []
-        window_length_in_ms = int(min_rep_duration_map[ex_folder] * 0.90) * 10
+        window_length_in_ms = int(training_params[ex_folder].window_length * 0.90) * 10
         rep_start_duration = int(window_length_in_ms / 20)
         if not os.path.isdir(numpy_exercises_data_path + ex_folder):
             continue
@@ -535,24 +544,51 @@ def get_grouped_windows_for_rep_transistion_per_exercise(config=None, use_exerci
         for exercise_file in exericse_readings_list:
             exercise = np.load(numpy_exercises_data_path + "/" + ex_folder + '/' + exercise_file)
             exercise_code = int(re.sub("[^0-9]", "", exercise_file))
+            if augmentation:
+                exercise_scaled_versions = stretch_compress_exercise_readings(exercise)
+                for version in exercise_scaled_versions:
+                    (windows_for_exercise, transition_labels_for_ex) = get_exercise_labeled_start_windows(version,
+                                                                                                          window_length_in_ms,
+                                                                                                          exercise_code,
+                                                                                                          rep_start_duration,
+                                                                                                          ex_code_class=
+                                                                                                          EXERCISE_NAME_TO_CLASS_LABEL[
+                                                                                                              ex_folder],
+                                                                                                          slide_step_perc=
+                                                                                                          training_params[
+                                                                                                              ex_folder].window_step_slide,
+                                                                                                          with_ex_code_as_feature=False)
+                    windows += windows_for_exercise
+                    transition_labels += transition_labels_for_ex
+                    if use_exercise_code_as_group:
+                        current_group = exercise_code
+                    else:
+                        current_group = get_group_for_id(exercise_code, config)
+                    for i in range(0, len(windows_for_exercise)):
+                        groups.append(current_group)
+                        classes.append(EXERCISE_NAME_TO_CLASS_LABEL[ex_folder])
 
-            (windows_for_exercise, transition_labels_for_ex) = get_exercise_labeled_transition_windows(exercise,
-                                                                                                       window_length_in_ms,
-                                                                                                       exercise_code,
-                                                                                                       rep_start_duration,
-                                                                                                       EXERCISE_NAME_TO_CLASS_LABEL[
-                                                                                                           ex_folder],
-                                                                                                       with_ex_code_as_feature=False)
-
-            windows += windows_for_exercise
-            transition_labels += transition_labels_for_ex
-            if use_exercise_code_as_group:
-                current_group = exercise_code
             else:
-                current_group = get_group_for_id(exercise_code, config)
-            for i in range(0, len(windows_for_exercise)):
-                groups.append(current_group)
-                classes.append(EXERCISE_NAME_TO_CLASS_LABEL[ex_folder])
+                (windows_for_exercise, transition_labels_for_ex) = get_exercise_labeled_start_windows(exercise,
+                                                                                                      window_length_in_ms,
+                                                                                                      exercise_code,
+                                                                                                      rep_start_duration,
+                                                                                                      EXERCISE_NAME_TO_CLASS_LABEL[
+                                                                                                          ex_folder],
+                                                                                                      slide_step_perc=
+                                                                                                      training_params[
+                                                                                                          ex_folder].window_step_slide,
+                                                                                                      with_ex_code_as_feature=False)
+
+                windows += windows_for_exercise
+                transition_labels += transition_labels_for_ex
+                if use_exercise_code_as_group:
+                    current_group = exercise_code
+                else:
+                    current_group = get_group_for_id(exercise_code, config)
+                for i in range(0, len(windows_for_exercise)):
+                    groups.append(current_group)
+                    classes.append(EXERCISE_NAME_TO_CLASS_LABEL[ex_folder])
 
         X = np.asarray(windows)
         # X = X[:, 1:, :]
@@ -566,7 +602,7 @@ def get_grouped_windows_for_rep_transistion_per_exercise(config=None, use_exerci
     return tot
 
 
-def extract_test_data(wrist_file, ankle_file, ex_code=EXECUTION_WORKOUT):
+def extract_test_data(wrist_file, ankle_file, ex_code=EXECUTION_WORKOUT, window=3000, step=0.20):
     db_wrist = sqlite3.connect(test_path + wrist_file)
     db_ankle = sqlite3.connect(test_path + ankle_file)
     cursor_w = db_wrist.cursor()
@@ -584,19 +620,15 @@ def extract_test_data(wrist_file, ankle_file, ex_code=EXECUTION_WORKOUT):
     readings_w = np.array(cursor_w.fetchall())
     readings_a = np.array(cursor_a.fetchall())
     interpolated = interpolate_readings(readings_w, readings_a)
-    windows = np.asarray(extract_windows(interpolated, 3000))
+    windows = np.asarray(extract_windows(interpolated, window, step=step))
     windows = windows.reshape(windows.shape[0], windows.shape[1], windows.shape[2], 1)
     windows = np.nan_to_num(windows)
     windows = np.transpose(windows, (0, 2, 1, 3))
     return windows
 
 
-
-def extract_test_rep_data(wrist_file, ankle_file, exercise_start_map, ex_code=EXECUTION_WORKOUT):
-    # min_rep_duration_map = get_min_rep_duration_map()
-    min_rep_duration_map = {'Burpees': 250, 'Push ups': 150, 'Squats': 150, 'KB Squat press': 150, 'Crunches': 250,
-                            'KB Press': 200, 'Pull ups': 250, 'Wall balls': 150, 'Dead lifts': 150, 'Box jumps': 200}
-
+def extract_test_rep_data(wrist_file, ankle_file, recognized_exercises, ex_code=EXECUTION_WORKOUT, model_params=None, augmentation=False,
+                          step=0.10):
     db_wrist = sqlite3.connect(test_path + wrist_file)
     db_ankle = sqlite3.connect(test_path + ankle_file)
     cursor_w = db_wrist.cursor()
@@ -614,15 +646,15 @@ def extract_test_rep_data(wrist_file, ankle_file, exercise_start_map, ex_code=EX
     readings_w = np.array(cursor_w.fetchall())
     readings_a = np.array(cursor_a.fetchall())
     interpolated = interpolate_readings(readings_w, readings_a)
-    ex_to_windows_map = {}
-    for ex in exercise_start_map:
-        window_length_in_ms = int(min_rep_duration_map[EXERCISE_CLASS_LABEL_TO_NAME[ex]] * 0.90) * 10
+    for rec_ex in recognized_exercises:
+        if augmentation:
+            MIN_REP_DURATION_MAP[EXERCISE_CLASS_LABEL_TO_NAME[rec_ex.ex_code]] /= 2
+        window_length_in_ms = int(model_params[EXERCISE_CLASS_LABEL_TO_NAME[rec_ex.ex_code]].window_length * 0.90) * 10
         cut_out_data = interpolated[:,
-                       exercise_start_map[ex][0] - int(window_length_in_ms / 50):exercise_start_map[ex][1] + int(
-                           window_length_in_ms / 50)]
-        windows = np.asarray(extract_windows(cut_out_data, window_length_in_ms, step=0.10))
+                       rec_ex.start_time - int(window_length_in_ms / 50):rec_ex.end_time]
+        windows = np.asarray(extract_windows(cut_out_data, window_length_in_ms, step=step))
         windows = windows.reshape(windows.shape[0], windows.shape[1], windows.shape[2], 1)
         windows = np.nan_to_num(windows)
         windows = np.transpose(windows, (0, 2, 1, 3))
-        ex_to_windows_map[ex] = windows
-    return ex_to_windows_map
+        rec_ex.set_windows(windows)
+    return recognized_exercises

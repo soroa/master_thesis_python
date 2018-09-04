@@ -1,3 +1,6 @@
+#
+RANDOMNESS_SEED = 29102018
+
 # CONSTANTS
 PUSH_UPS = 1
 KETTLE_BELL_SWINGS = 2
@@ -65,6 +68,8 @@ EXERCISE_CLASS_LABEL_TO_NAME = {
 }
 
 CLASS_LABEL_TO_AVERAGE_REP_DURATION = [250, 300, 300, 200, 300, 200, 250, 250, 250, 300]
+MIN_REP_DURATION_MAP = {'Burpees': 200, 'Push ups': 150, 'Squats': 150, 'KB Squat press': 200, 'Crunches': 200,
+                        'KB Press': 150, 'Pull ups': 200, 'Wall balls': 200, 'Dead lifts': 150, 'Box jumps': 200}
 
 ACCELEROMETER_CODE = 1
 GYROSCOPE_CODE = 4
@@ -104,7 +109,7 @@ POSITION_WRIST = "wrist"
 POSITION_ANKLE = "ankle"
 SMARTWATCH_POSITIONS = [POSITION_WRIST, POSITION_ANKLE]
 
-# Numpy data
+# Numpy numpy_data
 WRIST_ACCEL_X = 0
 WRIST_ACCEL_Y = 1
 WRIST_ACCEL_Z = 2
@@ -307,9 +312,13 @@ reps_to_keep = {
 }
 
 
-copy_from_path = "./dbs/"
-path = "./dbs2/"
+
+
+## Paths
+
+copy_from_path = "controlled_workout_data/individual_dbs/"
+path = "controlled_workout_data/merged_dbs/"
 test_path = "./free_workout_data/db/"
-null_data_path = "./null_class_data/db/"
-numpy_reps_data_path = "./data/np_reps_data/"
-numpy_exercises_data_path = "./data/np_exercise_data/"
+null_data_path = "numpy_data/null_class_data/db/"
+numpy_reps_data_path = "./numpy_data/np_reps_data/"
+numpy_exercises_data_path = "./numpy_data/np_exercise_data/"

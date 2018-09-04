@@ -4,6 +4,12 @@ import os
 import shutil
 import sqlite3
 
+import matplotlib
+
+from data_augumentation import rescale
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 
 from constants import path, READING_VALUES, READING_SENSOR_TYPE, ACCELEROMETER_CODE, GYROSCOPE_CODE, ROTATION_MOTION, \
@@ -146,11 +152,11 @@ def check_all_sensors_were_recorded(readings, participant, position, ex_id):
     sensor_codes = readings[:, READING_SENSOR_TYPE]
     occurences = collections.Counter(sensor_codes)
     if occurences[str(ACCELEROMETER_CODE)] == 0:
-        print(participant + " " + position + " acc data is missing for ex_id " + str(ex_id))
+        print(participant + " " + position + " acc numpy_data is missing for ex_id " + str(ex_id))
     if occurences[str(GYROSCOPE_CODE)] == 0:
-        print(participant + " " + position + " gyro data is missing for ex_id " + str(ex_id))
+        print(participant + " " + position + " gyro numpy_data is missing for ex_id " + str(ex_id))
     if occurences[str(ROTATION_MOTION)] == 0:
-        print(participant + " " + position + " rot data is missing for ex_id " + str(ex_id))
+        print(participant + " " + position + " rot numpy_data is missing for ex_id " + str(ex_id))
 
 
 def were_all_sensors_recorded(readings):
@@ -286,7 +292,7 @@ def interpolate_readings(wrist_readings, ankle_readings):
     #####
     # if withPlots:
     #     plt.subplot(3, 1, 1)
-    #     plt.suptitle("interpolating in cleaning: preprocessed data")
+    #     plt.suptitle("interpolating in cleaning: preprocessed numpy_data")
     #     timestamps_w_a = acc_readings_w[:, 4].astype("int64")
     #     timestamps_w_a = timestamps_w_a - timestamps_w_a[0]
     #     plt.plot(timestamps_w_a, acc_readings_values_w[:,2])
@@ -443,7 +449,74 @@ def plot_exercise_from_db(exId, exerciseCode, sensorType=ACCELEROMETER_CODE):
     plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 1000))
     addRepSeparators(plt, rep_starts, timestamps)
     plt.plot(timestamps, sensorReadingData[:, 2], 'g-')
+    plt.savefig("aaa.png")
+    return plt
 
+
+def plot_exercise_versus_augmented_version(exId, exerciseCode, sensorType=ACCELEROMETER_CODE):
+    conn = sqlite3.connect("sensor_readings_augmented_test")
+    c = conn.cursor()
+
+    c.execute(
+        'SELECT * FROM {tn} WHERE exercise_id={exid} AND sensor_type={st}'.format(tn=READINGS_TABLE_NAME,
+                                                                                  st=sensorType,
+                                                                                  exid=exId))
+    table = np.array(c.fetchall())
+    if table.size == 0:
+        return None
+
+    values = table[:, READING_VALUES]
+    # extract reps
+    reps = table[:, 6]
+    rep_starts = np.zeros([reps.shape[0], 1])
+    for i in range(0, reps.shape[0] - 1):
+        if reps[i] != reps[i + 1] or i == 0:
+            rep_starts[i] = True
+
+    sensorReadingData = np.zeros([np.shape(values)[0], SENSOR_TO_VAR_COUNT[sensorType]])
+
+    i = 0
+    for reading in values:
+        vals = np.array(reading.split(" "))
+        vals = vals.astype(np.float)
+        sensorReadingData[i] = vals
+        i = i + 1
+
+    # print(sensorReadingData[:, 0])
+
+    timestamps = table[:, 4].astype("int64")
+    timestamps = timestamps - timestamps[0]
+
+    equaly_spaced_apart_timestamps = np.array(list(range(timestamps[0], timestamps[-1] + 1, 10)))
+    interpolated_x = np.interp(equaly_spaced_apart_timestamps, timestamps,
+                               sensorReadingData[:, 1])
+    interpolated_x = interpolated_x - np.average(interpolated_x)
+
+    plt.figure()
+    plt.suptitle(EXERCISE_CODES_TO_NAME[exerciseCode] + " " + SENSOR_TO_NAME[sensorType] + " " + str(exId), fontsize=13)
+
+    # plt.subplot(2, 1, 1)
+    plt.xticks(np.arange(min(equaly_spaced_apart_timestamps), max(equaly_spaced_apart_timestamps) + 1, 2000))
+    plt.ylabel('x')
+    addRepSeparators(plt, rep_starts, timestamps)
+
+    plt.plot(equaly_spaced_apart_timestamps, interpolated_x, 'r-')
+
+    # plt.subplot(2, 1, 2)
+    # plt.ylabel('y')
+    # plt.xticks(np.arange(min(timestamps), max(timestamps) + 1, 2000))
+    # addRepSeparators(plt, rep_starts, timestamps)
+    # resampling
+    # interpol = interpolate(timestamps, sensorReadingData[:, 1])
+    # plt.plot(interpol['x'], interpol['y'], 'b-')
+
+    rescaled = rescale(interpolated_x, factor=0.50) + 10
+    # timestamps = (timestamps/2)
+    n = interpolated_x.shape[-1]
+    plt.plot(np.arange(0, rescaled.shape[0] * 10, 10) + 11000, rescaled, 'b-')
+    # plt.plot(timestamps, smooth(sensorReadingData[:, 1], 40), 'b--')
+
+    plt.savefig("aaa.png")
     return plt
 
 
@@ -657,16 +730,6 @@ def print_workout_info():
         print(key + " : " + str(value))
 
 
-def print_workout_info2():
-    reps_folders = os.listdir(numpy_reps_data_path)
-    name_to_rep_count = {}
-    for rep_folder in reps_folders:
-        reps_readings_list = os.listdir(numpy_reps_data_path + '/' + rep_folder)
-        name_to_rep_count[rep_folder] = len(reps_readings_list)
-    for key, value in sorted(name_to_rep_count.iteritems(), key=lambda (k, v): (v, k)):
-        print "%s: %s" % (key, value)
-
-
 def remove_1_2_rep_exercises(position):
     print("\n")
     print("**** REMOVING ONE REP EXERCISES... ***** ")
@@ -833,14 +896,26 @@ def add_to_merged_db(source, dest):
             elif table is WORKOUTS_TABLE_NAME:
                 values_placeholder = "?,?,?,?,?"
             merged_cursor.execute('INSERT INTO {tn} VALUES({values_placeholder})'.format(tn=table,
-                                                                                             values_placeholder=values_placeholder),
-                                      r)
+                                                                                         values_placeholder=values_placeholder),
+                                  r)
     current_participant_cursor.close()
     merged_db.commit()
     merged_cursor.close()
 
 
+def change_exercise_id(db_file, ex_id, new_ex_id):
+    db = sqlite3.connect(db_file)
+    cursor = db.cursor()
+    cursor.execute(
+        'UPDATE {tn} SET exercise_id={new_id} WHERE exercise_id={ex_id}'.format(tn=READINGS_TABLE_NAME,
+                                                                                new_id=new_ex_id, ex_id=ex_id))
+    db.commit()
+    cursor.close()
+
+# change_exercise_id("./free_workout_data/db/sensor_readings_test_alina_ankle", 740, 739)
+# plot_exercise_from_db2(772, 16)
+# add_to_merged_db(copy_from_path + "sensor_readings_nc_starkaor_ankle", path + "merged_ankle")
+# add_to_merged_db(copy_from_path + "sensor_readings_nc_starkaor_wrist", path + "merged_wrist")
 # split_wrist_ankle_and_merge()
 # do_common_preprocessing()
 # prepare_data()
-# print_workout_info2()

@@ -1,26 +1,16 @@
 import datetime
 
 import numpy as np
-from sklearn import linear_model
+from sklearn import linear_model, preprocessing
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 
 from cnn_train import split_train_test
-# X, Y = get_reps_features_data()
-# X, Y = get_windowed_exerices_raw_training_data()
-# mask = ~np.isnan(X).any(axis=1)
-# X = X[mask]
-# Y = Y[mask]
-#
-# X_scaled = preprocessing.scale(X)
-#
-#
-# Y_labels = np.argwhere(Y > 0)[:, 1]
-# train_features, test_features, train_labels, test_labels = train_test_split(X_scaled, Y_labels, test_size=0.25,
-#                                                                             random_state=42)
+from data_loading import get_grouped_windows_for_exerices
+
 from utils import yaml_loader, plot_confusion_matrix
 
 now = datetime.datetime.now()
@@ -183,6 +173,20 @@ config = yaml_loader("./config_cnn.yaml")
 conf_matrix = None
 classes = ["Push ups", "Pull ups", "Burpess", "Deadlifts", "Box jumps", "Squats", "Situps", "WB", "KB Press",
            "Thrusters"]
+
+
+
+
+if __name__ == "__main__":
+    X, Y , groups= get_grouped_windows_for_exerices(with_feature_extraction=True, config= config)
+
+    # X_scaled = preprocessing.scale(X)
+
+
+    Y_labels = np.argwhere(Y > 0)[:, 1]
+    train_features, test_features, train_labels, test_labels = train_test_split(X_scaled, Y_labels, test_size=0.25,
+                                                                                random_state=42)
+
 # for p_test in partipant_to_exercises_codes_map.keys():
 #     print("Leaving out " + p_test)
 #     train_exercise_codes = []

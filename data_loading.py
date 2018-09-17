@@ -52,7 +52,10 @@ def get_experience_level_for_ex_id(id, config):
 
 
 def get_grouped_windows_for_exerices(with_feature_extraction,
-                                     config=None, window_length=None, augumentation=False):
+                                     config=None, window_length=None,
+                                     augumentation=False,
+                                     with_null_class=True,
+                                     with_centering=False):
     ex_folders = os.listdir(numpy_exercises_data_path)
     if (window_length is None):
         window_length = config.get("data_params")["window_length"]
@@ -62,10 +65,12 @@ def get_grouped_windows_for_exerices(with_feature_extraction,
     for ex_folder in ex_folders:
         if not os.path.isdir(numpy_exercises_data_path + ex_folder):
             continue
+        if not with_null_class:
+            if ex_folder == "Null":
+                continue
         exericse_readings_list = os.listdir(numpy_exercises_data_path + ex_folder)
         label = EXERCISE_NAME_TO_CLASS_LABEL[ex_folder]
         for exercise_file in exericse_readings_list:
-            print(exercise_file)
             exercise = np.load(numpy_exercises_data_path + "/" + ex_folder + '/' + exercise_file)
             if augumentation:
                 rescaled_versions = stretch_compress_exercise_readings(exercise)
@@ -106,9 +111,11 @@ def get_grouped_windows_for_exerices(with_feature_extraction,
         X = X[:, sensor_mask, :]
 
     if with_feature_extraction:
-        X = extract_features(X)
-        X_features = np.nan_to_num(X)
-        return [X_features, Y, groups]
+        X_features = extract_features(X)
+        X_features = np.nan_to_num(X_features)
+        X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
+        X = np.nan_to_num(X)
+        return [np.transpose(X, (0, 2, 1, 3)), X_features, Y, groups]
     else:
         X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
         X = np.nan_to_num(X)
@@ -537,7 +544,7 @@ def get_grouped_windows_for_rep_transistion_per_exercise(training_params, config
         transition_labels = []
         classes = []
         window_length_in_ms = int(training_params[ex_folder].window_length * 0.90) * 10
-        rep_start_duration = int(window_length_in_ms / 20)
+        rep_start_duration = int(window_length_in_ms * 0.70 / 10)
         if not os.path.isdir(numpy_exercises_data_path + ex_folder):
             continue
         exericse_readings_list = os.listdir(numpy_exercises_data_path + '/' + ex_folder)
@@ -627,7 +634,8 @@ def extract_test_data(wrist_file, ankle_file, ex_code=EXECUTION_WORKOUT, window=
     return windows
 
 
-def extract_test_rep_data(wrist_file, ankle_file, recognized_exercises, ex_code=EXECUTION_WORKOUT, model_params=None, augmentation=False,
+def extract_test_rep_data(wrist_file, ankle_file, recognized_exercises, ex_code=EXECUTION_WORKOUT, model_params=None,
+                          augmentation=False,
                           step=0.10):
     db_wrist = sqlite3.connect(test_path + wrist_file)
     db_ankle = sqlite3.connect(test_path + ankle_file)

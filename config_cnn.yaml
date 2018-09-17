@@ -1,6 +1,6 @@
 cnn_params:
   batch_size: 30
-  epochs: 40
+  epochs: 20
   gpus:
     - 5
 

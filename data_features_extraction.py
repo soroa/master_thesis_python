@@ -7,12 +7,12 @@ def spectral_energy_of_energy_vectors(X):
     for i in range(0, X.shape[1], 3):
         energy_vector = np.square(X[:, :, i]) + np.square(X[:, :, i + 1]) + np.square(X[:, :, i + 2])
         mean_energy = np.mean(np.square(np.abs(np.fft.fft(energy_vector, axis=1))), axis=1)
-        res[:, (round(i / 3))] = mean_energy
+        res[:, int(round(i / 3))] = mean_energy
     return res
 
 
 def spectral_energy_of_energy_vectors_rep(rep):
-    res = np.zeros(int(rep.shape[0]/3))
+    res = np.zeros(int(rep.shape[0] / 3))
     for i in range(0, rep.shape[0], 3):
         energy_vector = np.square(rep[i, :]) + np.square(rep[i + 1, :]) + np.square(rep[i + 2, :])
         mean_energy = np.mean(np.square(np.abs(np.fft.fft(energy_vector))))
@@ -53,7 +53,7 @@ def extract_features_for_single_reading(reading):
     res = np.append(res, skewness_matix)
     kurtosis_matrix = kurtosis(reading, axis=1)
     res = np.append(res, kurtosis_matrix)
-    mean_spectral_energy = np.mean(np.abs(np.fft.fft(reading, axis=1)),axis=1)
+    mean_spectral_energy = np.mean(np.abs(np.fft.fft(reading, axis=1)), axis=1)
     res = np.append(res, mean_spectral_energy)
     spectral_energy_of_energy_vectors_matrix = spectral_energy_of_energy_vectors_rep(reading)
     res = np.append(res, spectral_energy_of_energy_vectors_matrix)

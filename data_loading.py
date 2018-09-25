@@ -4,6 +4,7 @@ import re
 import sqlite3
 
 import matplotlib
+from keras.engine.saving import load_model
 
 from constants import numpy_exercises_data_path, EXERCISE_NAME_TO_CLASS_LABEL, numpy_reps_data_path, test_path, \
     EXPERIENCE_LEVEL_MAP, READINGS_TABLE_NAME, EXERCISE_CLASS_LABEL_TO_NAME, EXECUTION_WORKOUT, EXERCISES_TABLE_NAME, \
@@ -184,7 +185,7 @@ def get_reps_with_features():
             rep = np.load(numpy_reps_data_path + "/" + ex + '/' + r_name)
             rep_features = extract_features_for_single_reading(rep[1:, :]).reshape((1, 150))
             rep_ex_id_plus_rep_num = re.sub("[^0-9]", "", r_name)
-            rep_ex_id = rep_ex_id_plus_rep_num[0:len(rep_exs_id_plus_rep_num) - 1]
+            rep_ex_id = rep_ex_id_plus_rep_num[0:len(rep_ex_id_plus_rep_num) - 1]
             if rep_ex_id in train_ids:
                 reps_train = np.append(reps_train, rep_features, axis=0)
                 labels_train = np.append(labels_train, label)
@@ -544,7 +545,7 @@ def get_grouped_windows_for_rep_transistion_per_exercise(training_params, config
         transition_labels = []
         classes = []
         window_length_in_ms = int(training_params[ex_folder].window_length * 0.90) * 10
-        rep_start_duration = int(window_length_in_ms * 0.70 / 10)
+        rep_start_duration = int(window_length_in_ms * 0.50 / 10)
         if not os.path.isdir(numpy_exercises_data_path + ex_folder):
             continue
         exericse_readings_list = os.listdir(numpy_exercises_data_path + '/' + ex_folder)
@@ -666,3 +667,12 @@ def extract_test_rep_data(wrist_file, ankle_file, recognized_exercises, ex_code=
         windows = np.transpose(windows, (0, 2, 1, 3))
         rec_ex.set_windows(windows)
     return recognized_exercises
+
+
+def load_rep_counting_models():
+    rep_counting_models = {}
+    for key, value in EXERCISE_NAME_TO_CLASS_LABEL.iteritems():
+        if key == "Null":
+            continue
+        rep_counting_models[value] = load_model("models/rep_counting_model_" + key + ".h5")
+    return rep_counting_models

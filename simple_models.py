@@ -1,17 +1,15 @@
 import datetime
 
 import numpy as np
-from sklearn import linear_model, preprocessing
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn import linear_model, svm
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.metrics import classification_report, accuracy_score, mean_squared_error
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 
-from cnn_train import split_train_test
 from data_loading import get_grouped_windows_for_exerices
-
-from utils import yaml_loader, plot_confusion_matrix
+from utils import yaml_loader
 
 now = datetime.datetime.now()
 start_time = now.strftime("%Y-%m-%d %H:%M")
@@ -29,20 +27,51 @@ def remove_nans(X, Y):
 tuned_parameters_rf = [{'n_estimators': [5, 10, 25, 50, 100, 1000]}]
 
 
-def random_forest(train_features, train_labels, test_features, test_labels):
+def random_forest_classifier(train_features, train_labels, test_features, test_labels, with_reporting=False):
     clf = RandomForestClassifier(n_jobs=2, random_state=0)
     clf.fit(train_features, train_labels)
-
     test_predictions = clf.predict(test_features)
-    test_error = np.sum(test_predictions != test_labels)
-    test_accuracy = (test_labels.shape[0] - test_error) / test_labels.shape[0]
+    test_accuracy = accuracy_score(test_predictions, test_labels)
     train_predictions = clf.predict(train_features)
-    train_error = np.sum(train_predictions != train_labels)
-    train_accuracy = (train_labels.shape[0] - train_error) / train_labels.shape[0]
-    f = open("./reports/report_" + start_time + ".txt", "a+")
-    f.write("test_accuracy " + str(test_accuracy) + "\n")
-    f.write("train_accuracy " + str(train_accuracy)+ "\n")
-    f.close()
+    train_accuracy = accuracy_score(train_predictions, train_labels)
+
+    if with_reporting:
+        f = open("./reports/report_" + start_time + ".txt", "a+")
+        f.write("test_accuracy " + str(test_accuracy) + "\n")
+        f.write("train_accuracy " + str(train_accuracy) + "\n")
+        f.close()
+    return test_predictions
+
+def random_forest_regressor(train_features, train_labels, test_features, test_labels, with_reporting=False):
+    clf = RandomForestRegressor(n_jobs=2, random_state=0)
+    clf.fit(train_features, train_labels)
+    test_predictions = np.around(clf.predict(test_features))
+    test_accuracy = accuracy_score(test_predictions, test_labels)
+    train_predictions = np.around(clf.predict(train_features))
+    mse = mean_squared_error(test_predictions, test_labels)
+    print("Test accuracy %d".format(mse))
+
+    if with_reporting:
+        f = open("./reports/report_" + start_time + ".txt", "a+")
+        f.write("test_accuracy " + str(test_accuracy) + "\n")
+        f.write("train_accuracy " + str(train_accuracy) + "\n")
+        f.close()
+    return test_predictions
+
+def svr(train_features, train_labels, test_features, test_labels, with_reporting=False):
+    clf = svm.SVR(kernel="linear")
+    clf.fit(train_features, train_labels)
+    test_predictions = np.around(clf.predict(test_features))
+    test_accuracy = accuracy_score(test_predictions, test_labels)
+    train_predictions = clf.predict(train_features)
+    train_accuracy = accuracy_score(train_predictions, train_labels)
+    print("Test accuracy %d".format(test_accuracy))
+
+    if with_reporting:
+        f = open("./reports/report_" + start_time + ".txt", "a+")
+        f.write("test_accuracy " + str(test_accuracy) + "\n")
+        f.write("train_accuracy " + str(train_accuracy) + "\n")
+        f.close()
     return test_predictions
 
 
@@ -65,9 +94,10 @@ def knn(train_features, train_labels, test_features, test_labels):
     train_accuracy = (train_labels.shape[0] - train_error) / train_labels.shape[0]
     f = open("./reports/report_" + start_time + ".txt", "a+")
     f.write("test_accuracy " + str(test_accuracy) + "\n")
-    f.write("train_accuracy " + str(train_accuracy)+ "\n")
+    f.write("train_accuracy " + str(train_accuracy) + "\n")
     f.close()
     return test_predictions
+
 
 # knn()
 
@@ -83,7 +113,7 @@ def svc(train_features, train_labels, test_features, test_labels):
     train_accuracy = (train_labels.shape[0] - train_error) / train_labels.shape[0]
     f = open("./reports/report_" + start_time + ".txt", "a+")
     f.write("test_accuracy " + str(test_accuracy) + "\n")
-    f.write("train_accuracy " + str(train_accuracy)+ "\n")
+    f.write("train_accuracy " + str(train_accuracy) + "\n")
     f.close()
     return test_predictions
 
@@ -174,14 +204,10 @@ conf_matrix = None
 classes = ["Push ups", "Pull ups", "Burpess", "Deadlifts", "Box jumps", "Squats", "Situps", "WB", "KB Press",
            "Thrusters"]
 
-
-
-
 if __name__ == "__main__":
-    X, Y , groups= get_grouped_windows_for_exerices(with_feature_extraction=True, config= config)
+    X, Y, groups = get_grouped_windows_for_exerices(with_feature_extraction=True, config=config)
 
     # X_scaled = preprocessing.scale(X)
-
 
     Y_labels = np.argwhere(Y > 0)[:, 1]
     train_features, test_features, train_labels, test_labels = train_test_split(X_scaled, Y_labels, test_size=0.25,

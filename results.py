@@ -2,9 +2,8 @@ import datetime
 import pickle
 
 import numpy as np
-from sklearn.metrics import confusion_matrix
-
-from cnn_train import plot_confusion_matrix
+# from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score
 
 
 class Result:
@@ -15,10 +14,11 @@ class Result:
     def save_result_object(self):
         # if not os.path.exists(self.directory_name):
         #     os.makedirs(self.directory_name)
-        file = open("./" + self.directory_name + "/" + self.name, "a+")
-        pickle.dump(self, file)
+        file = open("./" + self.directory_name + "/" + self.name, "w+")
         now = datetime.datetime.now()
         self.last_modified = now.strftime("%Y-%m-%d %H:%M")
+        pickle.dump(self, file)
+        file.close()
 
 
 class Result8020(Result):
@@ -31,7 +31,7 @@ class Result8020(Result):
         self.save_result_object()
 
 
-class LeaveOneOutResults(Result):
+class CVResult(Result):
 
     def __init__(self, name):
         Result.__init__(self, name)
@@ -43,18 +43,27 @@ class LeaveOneOutResults(Result):
         print(predicted_values)
         print(testing_accuracy)
         self.truth_predicted_values_tuples.append((truth_values, predicted_values))
+        print(self.truth_predicted_values_tuples)
         self.testing_accuracies.append(testing_accuracy)
         self.save_result_object()
 
     def get_number_of_subjects(self):
         return len(self.testing_accuracies)
 
-    def get_accuracy_per_class(self):
+
+    def get_box_plot_data(self):
         accuracies_per_class = {}
         for subject in self.truth_predicted_values_tuples:
             classes = np.unique(subject[0])
             for cl in classes:
                 indexes = np.where(subject[0] == cl)
+                accuracy = accuracy_score(subject[0][indexes], subject[1][indexes])
+                if cl not in accuracies_per_class.keys():
+                    accuracies_per_class[cl] = []
+                accuracies_per_class[cl].append(accuracy)
+        return accuracies_per_class
+
+
 
         # c = [np.where(r == 1)[0][0] for r in y_test]
         # cm = confusion_matrix(c, prediction_classes)

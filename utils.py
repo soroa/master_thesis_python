@@ -136,12 +136,6 @@ def plot_learning_curves(history, file_name):
     plt.ylabel('accuracy')
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig("reports/learning_curves_" + file_name + str(start_time) + ".png")
-    # summarize history for loss
-    # plt.plot(history.history['loss'])
-    # plt.plot(history.history['val_loss'])
-    # plt.title('model loss')
-    # plt.ylabel('loss')
-    # plt.xlabel('epoch')
-    # plt.legend(['train', 'test'], loc='upper left')
-    # plt.show()
+    path = "reports/learning_curves_" + file_name + str(start_time) + ".png"
+    plt.savefig(path)
+    return path

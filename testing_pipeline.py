@@ -2,9 +2,9 @@ import numpy as np
 from keras.engine.saving import load_model
 
 from cnn_train import TrainingRepCountingParameters
-from constants import EXERCISE_NAME_TO_CLASS_LABEL, EXECUTION_WORKOUT, EXERCISE_CLASS_LABEL_TO_NAME, NULL_CLASS
-from data_loading import extract_test_data, yaml_loader, extract_test_rep_data
-from rep_counting import count_predicted_reps2
+from constants import EXERCISE_NAME_TO_CLASS_LABEL, EXERCISE_CLASS_LABEL_TO_NAME, EXECUTION_WORKOUT
+from data_loading import extract_test_data, yaml_loader, extract_test_rep_data, load_rep_counting_models
+from rep_counting import count_predicted_reps2, rep_counting_model_pre_processing
 
 
 class RecognizedExercise:
@@ -27,15 +27,6 @@ class RecognizedExercise:
 
     def set_windows(self, windows):
         self.windows = windows
-
-
-def load_rep_counting_models():
-    rep_counting_models = {}
-    for key, value in EXERCISE_NAME_TO_CLASS_LABEL.iteritems():
-        if key == "Null":
-            continue
-        rep_counting_models[value] = load_model("models/rep_counting_model_" + key + ".h5")
-    return rep_counting_models
 
 
 def add_timeline(preds, windows_length, shift):
@@ -81,10 +72,15 @@ def init_best_rep_counting_models_params():
     return ex_to_rep_traning_model_params
 
 
+
+
+
+
 if __name__ == "__main__":
 
-    # for name in ["andrea", "jan", "starkaor", "desi", "simon"]:
-    for name in ["push1", "push2", "push3"]:
+    reps_sequences = []
+    for name in ["andrea", "jan", "starkaor", "desi", "simon"]:
+        # for name in ["push1", "push2", "push3"]:
         print("")
         print("")
         print(name)
@@ -98,7 +94,7 @@ if __name__ == "__main__":
         rep_counting_models = load_rep_counting_models()
         augmentation = False
         test_windows = extract_test_data(wrist_db_file, ankle_db_file,
-                                         ex_code=NULL_CLASS, window=window, step=step)
+                                         ex_code=EXECUTION_WORKOUT, window=window, step=step)
         model = load_model('./models/recognition_model_with_null.h5')
         preds = model.predict_classes(test_windows) + 1
         # preds = add_timeline(preds, window, step )
@@ -129,18 +125,23 @@ if __name__ == "__main__":
         recognized_exercises = extract_test_rep_data(wrist_db_file, ankle_db_file,
                                                      recognized_exercises,
                                                      model_params=model_params,
-                                                     ex_code=NULL_CLASS,
+                                                     ex_code=EXECUTION_WORKOUT,
                                                      augmentation=augmentation, step=0.05)
 
         exercises = None
 
         for rec_ex in recognized_exercises:
-            if rec_ex.ex_code != 1:
-                continue
+            # if rec_ex.ex_code != 1:
+            #     continue
             model = rep_counting_models[rec_ex.ex_code]
             preds = model.predict([rec_ex.windows])
             preds_rounded = 1 - preds.argmax(axis=1)
+            reps_sequences.append(preds_rounded)
             print(EXERCISE_CLASS_LABEL_TO_NAME[rec_ex.ex_code])
             print(str(rec_ex.get_duration()))
             print(preds_rounded)
             print(count_predicted_reps2(preds_rounded))
+
+    padded = rep_counting_model_pre_processing(reps_sequences, padding=0)
+    np.save("./free_workout_data/rep_sequences.npy", padded)
+

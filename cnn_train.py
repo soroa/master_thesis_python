@@ -1,19 +1,22 @@
 # set the matplotlib backend so figures can be saved in the background
 import argparse
 import os
-
 # leave this line
+import random
+
 import psutil
 from keras.wrappers.scikit_learn import KerasClassifier
 from numpy import argmax
-from sklearn.metrics import confusion_matrix
-from sklearn.model_selection import GridSearchCV, GroupShuffleSplit, LeaveOneGroupOut
+from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.model_selection import GridSearchCV, GroupShuffleSplit, LeaveOneGroupOut, train_test_split
+from sklearn.preprocessing import StandardScaler
 
 from constants import RANDOMNESS_SEED, WRIST_ACCEL_X, WRIST_ACCEL_Y, WRIST_ACCEL_Z, ANKLE_ACCEL_X, ANKLE_ACCEL_Y, \
     ANKLE_ACCEL_Z, WRIST_GYRO_X, WRIST_GYRO_Y, WRIST_GYRO_Z, ANKLE_GYRO_X, ANKLE_GYRO_Y, ANKLE_GYRO_Z, ANKLE_ROT_Z, \
-    ANKLE_ROT_Y, ANKLE_ROT_X, WRIST_ROT_Z, WRIST_ROT_Y, WRIST_ROT_X
+    ANKLE_ROT_Y, ANKLE_ROT_X, WRIST_ROT_Z, WRIST_ROT_Y, WRIST_ROT_X, EXERCISE_NAME_TO_CLASS_LABEL, \
+    best_rep_counting_models_params_path
 from rep_counting import count_predicted_reps, count_real_reps
-from results import LeaveOneOutResults, Result8020
+from results import CVResult, Result8020
 from utils import *
 
 now = datetime.datetime.now()
@@ -33,11 +36,12 @@ if args.gpus:
 import tensorflow as tf
 import keras
 from keras import Sequential, Input, Model
-from keras.layers import Activation, Flatten, Dropout, Dense, Convolution2D, K, concatenate
+from keras.layers import Activation, Flatten, Dropout, Dense, Convolution2D, K, concatenate, BatchNormalization
 from keras.optimizers import SGD
 from keras.utils import np_utils, multi_gpu_model
 
-from data_loading import get_grouped_windows_for_exerices, get_grouped_windows_for_rep_transistion_per_exercise
+from data_loading import get_grouped_windows_for_exerices, get_grouped_windows_for_rep_transistion_per_exercise, \
+    load_rep_counting_models
 from keras.backend.tensorflow_backend import set_session
 
 tf_config = tf.ConfigProto()
@@ -182,7 +186,7 @@ history = AccuracyHistory()
 
 early_stopping = keras.callbacks.EarlyStopping(monitor='val_acc',
                                                min_delta=0.001,
-                                               patience=3,
+                                               patience=8,
                                                verbose=0,
                                                mode='auto')
 
@@ -196,22 +200,34 @@ def rep_counting_model(input_shape,
                        strides,
                        layers,
                        filters=None,
-                       dropout=None,
-                       inner_dense_layer_neurons=250, n_classes=2):
+                       with_dropout=True,
+                       inner_dense_layer_neurons=250,
+                       n_classes=2,
+                       activation_fun="relu",
+                       batch_normalization=False):
     # sensor numpy_data
-    if dropout is None:
-        dropout = [0.5, 0.5, 0.5, 05, 0.5]
+    dropout = [0.5, 0.5, 0.5, 0.5, 0.5]
     if filters is None:
         filters = [100, 25, 75, 75, 25]
     conv_input = Input(shape=input_shape)
     input = conv_input
     for i in range(0, layers):
-        conv_output = Convolution2D(filters=filters[i], kernel_size=(10, 18), strides=strides,
+        # if i == 0:
+        #     kernel_size = (12, 3)
+        # else:
+        kernel_size = (12, 18)
+
+        conv_output = Convolution2D(filters=filters[i], kernel_size=kernel_size, strides=strides,
                                     input_shape=input_shape,
                                     border_mode='same',
                                     data_format="channels_last")(input)
-        act = Activation('relu')(conv_output)
-        after_dropout = Dropout(dropout[i])(act)
+        act = Activation(activation_fun)(conv_output)
+        if batch_normalization:
+            act = BatchNormalization(axis=2)(act)
+        if with_dropout:
+            after_dropout = Dropout(dropout[i])(act)
+        else:
+            after_dropout = act
         input = after_dropout
 
     flattened = Flatten()(after_dropout)
@@ -221,11 +237,14 @@ def rep_counting_model(input_shape,
     output = (Dense(n_classes))(pre_output)
     output2 = Activation('softmax')(output)
 
+    parameters = {'strides' : strides, 'layers':layers, "filters": filters, 'kernel_size': kernel_size, 'with_dropout':with_dropout, 'inner_dense_layer_neurons': inner_dense_layer_neurons,
+                 'activation_fun': activation_fun, 'batch_normalization': batch_normalization}
+
     # Define model with two inputs
     model = Model(inputs=[conv_input], outputs=[output2])
     sgd = SGD(lr=0.0001, nesterov=True, decay=1e-6, momentum=0.9)
     model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
-    return model
+    return {"model":model, 'params': parameters}
 
 
 def recognition_model_with_statistical_features(input_shape,
@@ -236,7 +255,7 @@ def recognition_model_with_statistical_features(input_shape,
                                                 inner_dense_layer_neurons=250, n_classes=2):
     # sensor numpy_data
     if dropout is None:
-        dropout = [0.5, 0.5, 0.5, 05, 0.5]
+        dropout = [0.5, 0.5, 0.5, 0.5, 0.5]
     if filters is None:
         filters = [100, 25, 75, 75, 25]
     conv_input = Input(shape=input_shape)
@@ -275,39 +294,65 @@ def model_I(input_shape,
             first_layer_kernle_size=(15, 18),
             first_layer_strides=(3, 1),
             inner_dense_layer_neurons=250,
-            n_classes=nb_classes):
+            n_classes=nb_classes,
+            activation_function="relu",
+            with_dropout=True,
+            with_input_normalization=False,
+            with_batch_normalization=False
+            ):
     K.clear_session()
     model = Sequential()
+    print("model shape is " + str(input_shape))
+
+    if with_input_normalization:
+        model.add(BatchNormalization(axis=2))
     model.add(
         Convolution2D(filters=conv_layer_1_filters, kernel_size=first_layer_kernle_size, strides=first_layer_strides,
                       input_shape=input_shape,
                       border_mode='same',
                       data_format="channels_last"))
-    model.add(Activation('relu'))
-    model.add(Dropout(dropout_1))
+    model.add(Activation(activation_function))
+    if with_batch_normalization:
+        model.add(BatchNormalization(axis=2))
+    if with_dropout:
+        model.add(Dropout(dropout_1))
     model.add(Convolution2D(filters=conv_layer_2_filters, kernel_size=(15, 18), strides=(3, 1), input_shape=input_shape,
                             border_mode='same',
                             data_format="channels_last"))
     model.add(Activation('relu'))
-    model.add(Dropout(dropout_2))
+    if with_batch_normalization:
+        model.add(BatchNormalization(axis=2))
+    if with_dropout:
+        model.add(Dropout(dropout_2))
     model.add(Convolution2D(filters=conv_layer_3_filters, kernel_size=(15, 18), strides=(3, 1), input_shape=input_shape,
                             border_mode='same',
                             data_format="channels_last"))
-    model.add(Activation('relu'))
-    model.add(Dropout(dropout_3))
+    model.add(Activation(activation_function))
+    if with_batch_normalization:
+        model.add(BatchNormalization(axis=2))
+    if with_dropout:
+        model.add(Dropout(dropout_3))
     model.add(Convolution2D(filters=conv_layer_4_filters, kernel_size=(15, 18), strides=(3, 1), input_shape=input_shape,
                             border_mode='same',
                             data_format="channels_last"))
-    model.add(Activation('relu'))
-    model.add(Dropout(dropout_4))
+    model.add(Activation(activation_function))
+    if with_batch_normalization:
+        model.add(BatchNormalization(axis=2))
+    if with_dropout:
+        model.add(Dropout(dropout_4))
     model.add(Convolution2D(filters=conv_layer_5_filters, kernel_size=(15, 18), strides=(3, 1), input_shape=input_shape,
                             border_mode='same',
                             data_format="channels_last"))
-    model.add(Activation('relu'))
-    model.add(Dropout(dropout_5))
+    model.add(Activation(activation_function))
+    if with_batch_normalization:
+        model.add(BatchNormalization(axis=2))
+    if with_dropout:
+        model.add(Dropout(dropout_5))
     model.add(Flatten())
 
     model.add(Dense(inner_dense_layer_neurons))
+    # model.add(Dense(extra_layer_1))
+    # model.add(Dense(extra_layer_2))
     model.add(Dense(n_classes))
     model.add(Activation('softmax'))
 
@@ -319,7 +364,7 @@ def model_I(input_shape,
     print()
     print()
     print('mem: {}'.format(mem))
-    print()
+    # print(model.summary())
     print()
     print()
     return model
@@ -445,7 +490,7 @@ def grid_search_over_window_size(save_model=False):
             model.save("recognition_model_null_wl_" + str(wl) + ".h5")
 
 
-def split_train_test(X, y, groups, n_classes=nb_classes, extra_features=None, test_size=0.1):
+def split_train_test(X, y, groups, n_classes=nb_classes, test_size=0.1):
     gss = GroupShuffleSplit(test_size=test_size, random_state=RANDOMNESS_SEED)
     train_indexes, test_indexes = gss.split(X, y, groups=groups).next()
     X_train = X[train_indexes]
@@ -454,11 +499,7 @@ def split_train_test(X, y, groups, n_classes=nb_classes, extra_features=None, te
     X_test = X[test_indexes]
     y_test = np_utils.to_categorical(y[test_indexes] - 1, n_classes)
     groups_test = groups[test_indexes]
-    if extra_features is not None:
-        X_extra_train = extra_features[train_indexes]
-        X_extra_test = extra_features[test_indexes]
-        return ((X_train, X_extra_train, y_train, groups_train), (X_test, X_extra_test, y_test, groups_test))
-    return ((X_train, y_train, groups_train), (X_test, y_test, groups_test))
+    return (X_train, y_train, groups_train), (X_test, y_test, groups_test)
 
 
 def grid_search_single_rep_counting_model(model, X, Y, groups):
@@ -513,7 +554,34 @@ def grid_search_single_rep_counting_model(model, X, Y, groups):
     return grid.best_estimator_
 
 
-def rep_counting_training(training_parameters, with_reporting=False, augmentation=False, exercises=None):
+def update_best_model_paramters(ex, model_params):
+    print(model_params)
+    files = os.listdir("./")
+    if best_rep_counting_models_params_path not in files:
+        best_counting_models_params = {}
+    else:
+        best_counting_models_params = np.load(best_rep_counting_models_params_path)
+    if ex not in best_counting_models_params.keys():
+        print("new best params for {} found ".format(ex))
+        best_counting_models_params[ex] = model_params
+    else:
+        previous_best = best_counting_models_params[ex]
+        val_accuracies_best= previous_best['val_acc']
+        mean_best = np.mean(val_accuracies_best[-3:])
+        new_val_accuracies = model_params['val_acc']
+        mean_new = np.mean(new_val_accuracies[-3:])
+        if mean_new>mean_best:
+            print("new best params for {} found ".format(ex))
+            best_counting_models_params[ex] = model_params
+
+    np.save(best_rep_counting_models_params_path, dict(best_counting_models_params))
+
+
+
+
+def rep_counting_training(training_parameters, with_reporting=False, augmentation=False, exercises=None,
+                          with_dropout=True,
+                          normalize_input=False, batch_normalization=False, activation_fun="relu"):
     data_per_exercise = get_grouped_windows_for_rep_transistion_per_exercise(training_params=training_parameters,
                                                                              config=config,
                                                                              use_exercise_code_as_group=True,
@@ -522,13 +590,31 @@ def rep_counting_training(training_parameters, with_reporting=False, augmentatio
     for ex in data_per_exercise.keys():
         print(training_parameters[ex])
         X, classes, Y, groups = data_per_exercise[ex]
-        (tra, test) = split_train_test(X, Y, groups, n_classes=2, extra_features=classes)
+        test_size = 0.1
+        (tra, test) = split_train_test(X, Y, groups, n_classes=2, test_size=test_size)
+        X_train = tra[0]
+        Y_train = tra[1]
+        X_test = test[0]
+        Y_test = test[1]
+        if normalize_input:
+            normalized_data = standard_scale_data(X_train, X_test)
+            X_train = normalized_data[0]
+            X_test = normalized_data[1]
         np.set_printoptions(linewidth=np.inf)
+        print(X_train.shape)
+        print(X_test.shape)
+        print(Y_train[0])
+        model_and_params = rep_counting_model((X_train.shape[1], X_train.shape[2], 1), strides=training_parameters[ex].strides,
+                                    layers=training_parameters[ex].layers, batch_normalization=batch_normalization,
+                                    activation_fun=activation_fun, with_dropout=with_dropout)
+        model_params = model_and_params["params"]
+        model_params["normalize_input"] = normalize_input
+        model_params["test_size"] = test_size
+
 
         if len(gpus) <= 1:
             print("[INFO] training with 1 GPU...")
-            model = rep_counting_model((tra[0].shape[1], tra[0].shape[2], 1), strides=training_parameters[ex].strides,
-                                       layers=training_parameters[ex].layers)
+            model = model_and_params["model"]
         # otherwise, we are compiling using multiple GPUs
         else:
             print("[INFO] training with {} GPUs...".format(gpus))
@@ -537,21 +623,24 @@ def rep_counting_training(training_parameters, with_reporting=False, augmentatio
             # the results from the gradient updates on the CPU
             with tf.device("/cpu:0"):
                 # initialize the model
-                model = rep_counting_model((tra[0].shape[1], tra[0].shape[2], 1),
-                                           strides=training_parameters[ex].strides,
-                                           layers=training_parameters[ex].layers)
+                model = model_and_params["model"]
 
             # make the model parallel
             model = multi_gpu_model(model, gpus=len(gpus))
 
         sgd = SGD(lr=0.0001, nesterov=True, decay=1e-6, momentum=0.9)
         model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
-        history = model.fit(tra[0], tra[2], epochs=config.get("cnn_params")['epochs'],
-                            validation_data=(test[0], test[2]),
+        history = model.fit(X_train, Y_train, epochs=config.get("cnn_params")['epochs'],
+                            validation_data=(X_test, Y_test),
                             batch_size=config.get("cnn_params")['batch_size'],
-                            # callbacks=[history, early_stopping])
-                            )
-        plot_learning_curves(history, file_name=str(ex))
+                            callbacks=[early_stopping])
+
+        model_params["val_acc"] = history.history['val_acc']
+        model_params["acc"] = history.history['acc']
+
+        learning_curves_path = plot_learning_curves(history, file_name=str(ex))
+        model_params["learning_curves_path"] = learning_curves_path
+        update_best_model_paramters(ex,model_params)
         if augmentation:
             model.save("rep_counting_model_aug" + ex + ".h5")
         else:
@@ -563,7 +652,7 @@ def rep_counting_training(training_parameters, with_reporting=False, augmentatio
 
             f.write((ex) + "\n")
 
-            groups = np.unique(test[3])
+            groups = np.unique(test[2])
             np.set_printoptions(linewidth=np.inf)
             errors = 0
             total_truth_reps = 0
@@ -571,14 +660,14 @@ def rep_counting_training(training_parameters, with_reporting=False, augmentatio
             f.write("acc " + str(history.history['acc'][-1]) + "\n")
             for g in groups:
                 f.write("ex id " + str(g) + "\n")
-                indexes = np.argwhere(test[3] == g)
-                x = test[0][indexes, :, :, :]
+                indexes = np.argwhere(test[2] == g)
+                x = X_test[indexes, :, :, :]
                 x = np.squeeze(x)
                 x = x.reshape((x.shape[0], x.shape[1], x.shape[2], 1))
                 # x_extra = test[1][indexes, :]
                 # x_extra = np.squeeze(x_extra, axis=2)
                 preds = model.predict(x)
-                truth = test[2][indexes, 0].astype(np.int32).ravel()
+                truth = Y_test[indexes, 0].astype(np.int32).ravel()
                 preds = 1 - preds.argmax(axis=1)
                 reps_truth = count_real_reps(truth)
                 reps_pred = count_predicted_reps(preds)
@@ -601,8 +690,7 @@ def rep_counting_training(training_parameters, with_reporting=False, augmentatio
             f.write("\n")
             f.write("\n")
             f.write("\n")
-    if with_reporting:
-        f.close()
+            f.close()
 
 
 def best_rep_counting_models():
@@ -705,6 +793,57 @@ def init_best_rep_counting_models_params():
     return ex_to_rep_traning_model_params
 
 
+def padd_sequences(X, padding=0):
+    longest = -1;
+    for x in X:
+        if len(x) > longest:
+            longest = len(x)
+    if padding == 0:
+        padded_X = np.zeros((len(X), longest))
+    else:
+        padded_X = np.ones((len(X), longest)) * padding
+    for i in range(0, len(X)):
+        padded_X[i, 0:len(X[i])] = X[i]
+    return padded_X
+
+
+def rep_counting_final_stage_generate_training_data(augmentation=False,
+                                                    exercises=None):
+    data_per_exercise = get_grouped_windows_for_rep_transistion_per_exercise(
+        training_params=init_best_rep_counting_models_params(),
+        config=config,
+        use_exercise_code_as_group=True,
+        augmentation=augmentation,
+        exercises=exercises)
+
+    models = load_rep_counting_models()
+    X_sequences = []
+    Y_rep_count_per_sequence = []
+    for ex in data_per_exercise.keys():
+        X, classes, Y, groups = data_per_exercise[ex]
+        model = models[EXERCISE_NAME_TO_CLASS_LABEL[ex]]
+        groups_unique = np.unique(groups)
+        np.set_printoptions(linewidth=np.inf)
+        for g in groups_unique:
+            indexes = np.argwhere(groups == g)
+            indexes = np.squeeze(indexes)
+            x = X[indexes, :, :, :]
+            # x = np.squeeze(x)
+            # x = x.reshape((x.shape[0], x.shape[1], x.shape[2], 1))
+            # x_extra = test[1][indexes, :]
+            preds = model.predict(x)
+            preds = 1 - preds.argmax(axis=1)
+            X_sequences.append(preds)
+            truth = Y[indexes].astype(np.int32).ravel()
+            reps_truth = count_real_reps(truth)
+            Y_rep_count_per_sequence.append(reps_truth)
+            X_sequences.append(truth)
+            Y_rep_count_per_sequence.append(reps_truth)
+    X_sequences = padd_sequences(X_sequences, padding=-1)
+    np.save("X_sequences", X_sequences)
+    np.save("rep_count_per_sequence", Y_rep_count_per_sequence)
+
+
 def exercise_vs_null_training():
     result = Result8020("exercise_vs_null_training")
     X, Y, groups = get_grouped_windows_for_exerices(False, config, augumentation=False, with_null_class=True)
@@ -717,7 +856,6 @@ def exercise_vs_null_training():
                         batch_size=config.get("cnn_params")['batch_size'],
                         validation_data=(test[0], test[1]),
                         callbacks=[early_stopping])
-    # callbacks=[history])
     result.set_result(history.history["val_acc"])
 
 
@@ -831,25 +969,47 @@ def train_model_with_statistical_features():
               )
 
 
-def cross_validated_recognition_results():
-    results = LeaveOneOutResults("leave_one_out_recognition_results")
+def standard_scale_data(X_train, X_test):
+    scalers = {}
+    for i in range(X_train.shape[2]):
+        scalers[i] = StandardScaler()
+        X_train[:, :, i, 0] = scalers[i].fit_transform(X_train[:, :, i, 0])
+
+    for i in range(X_test.shape[2]):
+        X_test[:, :, i, 0] = scalers[i].transform(X_test[:, :, i, 0])
+    return X_train, X_test
+
+
+def cross_validated_recognition_results(with_dropout, with_batch_normalization, normalize_input=False,
+                                        activation="relu"):
+    results = CVResult("cross_validated_recognition_results")
 
     X, Y, groups = get_grouped_windows_for_exerices(with_feature_extraction=False, config=config,
                                                     augumentation=False,
                                                     with_null_class=False)
+
+    print("Data loaded")
+    print(X.shape)
+
     logo = LeaveOneGroupOut()
     gss = GroupShuffleSplit(test_size=0.2, random_state=RANDOMNESS_SEED)
-    # logo.get_n_splits(X, Y, groups)
+    # logo.get_n_spli   ts(X, Y, groups)
     #
     # logo.get_n_splits(groups=groups)  # 'groups' is always required
-    for train_index, test_index in logo.split(X, Y, groups):
+    for train_index, test_index in gss.split(X, Y, groups):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = np_utils.to_categorical(Y[train_index] - 1, 10), np_utils.to_categorical(Y[test_index] - 1,
                                                                                                    10)
-
+        if normalize_input:
+            X_train, X_test = standard_scale_data(X_train, X_test)
         model = model_I((X_train.shape[1], X_train.shape[2], 1), first_layer_kernle_size=(15, 3),
                         first_layer_strides=(1, 3),
-                        n_classes=10)
+                        n_classes=10,
+                        with_dropout=with_dropout,
+                        activation_function=activation,
+                        with_batch_normalization=with_batch_normalization,
+                        with_input_normalization=normalize_input
+                        )
         history = model.fit(X_train, y_train,
                             epochs=config.get("cnn_params")['epochs'],
                             batch_size=config.get("cnn_params")['batch_size'],
@@ -857,8 +1017,82 @@ def cross_validated_recognition_results():
                             callbacks=[early_stopping])
         predicted_values = model.predict_classes(X_test)
         truth_values = argmax(y_test, axis=1)
-        results.set_results(truth_values, predicted_values, history.history['val_acc'])
+        print("*** Accuracy **** ")
+        print(accuracy_score(truth_values, predicted_values))
+        print("*****************")
+        print(np.unique(predicted_values))
+        print(np.unique(truth_values))
+        results.set_results(truth_values, predicted_values, history.history['val_acc'][-1])
+        return
 
+
+def baseline_model(input_dim):
+    # create model
+    model = Sequential()
+    model.add(Dense(input_dim, input_dim=input_dim, kernel_initializer='normal', activation='elu'))
+    model.add(Dense(int(input_dim / 2), input_dim=input_dim, kernel_initializer='normal', activation='elu'))
+    model.add(Dense(int(input_dim / 4), input_dim=int(input_dim / 2), kernel_initializer='normal', activation='elu'))
+    model.add(Dense(int(input_dim / 8), input_dim=int(input_dim / 4), kernel_initializer='normal', activation='elu'))
+    model.add(Dense(1, kernel_initializer='normal'))
+    # Compile model
+    model.compile(loss='mean_squared_error', optimizer='adam', metrics=['mse', 'mae', 'mape'])
+    return model
+
+
+def generate_fake_data(n_samples, length):
+    X = np.ones((n_samples, length)) * (-1)
+    X_noisy = np.ones((n_samples, length)) * (-1)
+    labels = np.zeros(n_samples)
+    ones_seq_length = [3, 4, 5, 6, 7, 8]
+    for i in range(0, X.shape[0]):
+        ones_index = random.randint(0, len(ones_seq_length) - 1)
+        ones = ones_seq_length[ones_index]
+        zeros = ones + int(np.random.uniform(0.2, 1) * ones)
+        one_rep = np.concatenate((np.ones(ones), np.zeros(zeros)))
+        stop = int(length * np.random.uniform(0.5, 1))
+        j = 0
+        reps = 0
+        # add various kinds of length of the rep, always +-1
+        while j + one_rep.shape[0] <= stop:
+            X[i, j:j + one_rep.shape[0]] = one_rep
+            j = j + one_rep.shape[0]
+            reps += 1
+        indexes = random.sample(range(0, stop), int(length * 0.02))
+        noisy_version = np.copy(X[i, :])
+        noisy_version[indexes] = 1 - noisy_version[indexes]
+        X_noisy[i, :] = noisy_version
+        labels[i] = reps
+        i += 1
+    return (X, X_noisy, labels)
+
+
+def binary_rep_sequences_training():
+    X = np.load("./X_sequences.npy")
+    X = np.pad(X, (4, 0), 'constant', constant_values=(1,))[4:, :]
+    y = np.load("./rep_count_per_sequence.npy")
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+    (X_fake, X_fake_noisy, labels_fake) = generate_fake_data(10000, X.shape[1])
+    X_train = np.concatenate((X_train, X_fake, X_fake_noisy))
+    y_train = np.concatenate((y_train, labels_fake, labels_fake))
+    # random_forest_regressor(X_train, y_train, X_test, y_test)
+    model = baseline_model((X_train[0].shape)[0])
+    model.fit(X_train, y_train,
+              epochs=config.get("cnn_params")['epochs'],
+              batch_size=config.get("cnn_params")['batch_size'],
+              validation_data=(X_test, y_test),
+              callbacks=[early_stopping])
+    test_predictions = np.squeeze(np.around(model.predict(X_test))).astype(np.int32)
+    # print("Test accuracy $d".format(mse))
+
+
+#
 
 if __name__ == "__main__":
-    cross_validated_recognition_results()
+    rep_counting_training(init_best_rep_counting_models_params(), normalize_input=False, batch_normalization=False,
+                          with_reporting=True, activation_fun="relu")
+    # cross_validated_recognition_results(normalize_input=True, with_dropout=True, with_batch_normalization=True,
+    #                                     activation="relu")
+    # rep_counting_final_stage_generate_training_data()
+    # binary_rep_sequences_training()
+    # generate_fake_data(1000, 1000)
+    # rep_counting_training()

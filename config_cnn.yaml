@@ -1,8 +1,8 @@
 cnn_params:
   batch_size: 30
-  epochs: 20
+  epochs: 100
   gpus:
-    - 5
+    - 4
 
 
 sensor_positions:
